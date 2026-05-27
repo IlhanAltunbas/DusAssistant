@@ -1,0 +1,17 @@
+# Python sanal ortamı
+**/venv/
+**/*.pyc
+__pycache__/
+
+# Android / KMP Geçici Dosyaları
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+
+# İşletim sistemi kalıntıları
+.DS_Store
+Thumbs.db
+
+.env
