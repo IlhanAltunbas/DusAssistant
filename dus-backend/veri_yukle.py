@@ -59,7 +59,7 @@ def verileri_hazirla_ve_yukle(pdf_yolu, collection_name="periodontoloji_notlari"
 
 # Script doğrudan çalıştırıldığında burası tetiklenir
 if __name__ == "__main__":
-    # TODO: Burayı kendi PDF dosyanın adıyla değiştireceksin
+    # TODO: PDF dosyaları eklenecek
     dosya_yolu = "kaynaklar/Clinical_Periodontology.pdf"
     
     if os.path.exists(dosya_yolu):
