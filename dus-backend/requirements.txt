@@ -1,0 +1,9 @@
+fastapi==0.110.0
+uvicorn==0.28.0
+langchain==0.1.12
+langchain-community==0.0.28
+langchain-anthropic==0.1.4
+langchain-openai==0.1.0
+qdrant-client==1.8.0
+pypdf==4.1.0
+python-dotenv==1.0.1
