@@ -28,9 +28,8 @@ def retriever_olustur(collection_name="periodontoloji_notlari"):
     return qdrant.as_retriever(search_kwargs={"k": 5})
 
 # 3. LLM (Claude) Kurulumu
-# Hızlı ve maliyet etkin olduğu için Claude 3 Haiku modelini seçtik, sıcaklığı (temperature) 0 yaptık.
 llm = ChatAnthropic(
-    model_name="claude-haiku-4-5-20251001", # <-- GÜNCEL 4.5 HAIKU MODELİ
+    model_name="claude-haiku-4-5-20251001", 
     temperature=0
 )
 
@@ -69,7 +68,6 @@ def asistana_sor(soru: str):
 
 # Sadece bu dosyayı test etmek için
 if __name__ == "__main__":
-    # Yüklediğin PDF'in içeriğine uygun bir soru sor
     test_sorusu = "Gingivitis nedir ve temel belirtileri nelerdir?" 
     print(f"Soru: {test_sorusu}")
     
