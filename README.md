@@ -1,4 +1,4 @@
-\# 🦷 DUS Assistant | AI-Powered Medical Education Platform
+# 🦷 DUS Assistant | AI-Powered Medical Education Platform
 
 
 
