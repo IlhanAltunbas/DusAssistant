@@ -1,3 +1,4 @@
+
 # DUS Assistant: RAG-Based Educational Assistant for Medical Specialization
 
 <p>
@@ -21,7 +22,7 @@ The project is engineered with a strict separation of concerns, dividing the cro
 * **Backend & RAG Pipeline:** Developed with FastAPI and Python. It integrates Qdrant as a vector database for high-speed semantic search and utilizes Anthropic's Claude 4.5 LLM for context-aware, clinically grounded response generation.
 
 <p align="center">
-  <img src="link_to_your_architecture_diagram.png" alt="System Architecture Diagram" width="700">
+  <img width="803" height="523" alt="Ekran görüntüsü 2026-05-30 170515" src="https://github.com/user-attachments/assets/22d05c43-299c-498a-af08-96598d151413" />
 </p>
 
 ## Core Capabilities
@@ -34,8 +35,9 @@ The project is engineered with a strict separation of concerns, dividing the cro
 ## Application Interfaces
 
 <p align="center">
-  <img src="link_to_ui_screenshot_1.png" alt="Application Main Screen" width="250"> &nbsp;&nbsp;&nbsp;
-  <img src="link_to_ui_screenshot_2.png" alt="Chat Interface Demonstrating RAG" width="250">
+   <img width="250" alt="Chat History" src="https://github.com/user-attachments/assets/175d21a5-3b90-4e00-b754-b5bbfb4ef78c" />
+   <img width="250" alt="Application Main Screen" src="https://github.com/user-attachments/assets/d11b8fe8-87b0-4691-aa2d-f5f93e19d320" />
+   <img width="250"  alt="Chat Interface Demonstrating RAG" src="https://github.com/user-attachments/assets/a910c2a6-019d-4379-8879-20c7b932726b" />
 </p>
 
 ## Author
