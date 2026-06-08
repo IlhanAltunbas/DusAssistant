@@ -6,6 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import com.ilhanaltunbas.dusassistant.data.local.DusDatabase
+import com.ilhanaltunbas.dusassistant.data.local.getDatabaseBuilder
+import com.ilhanaltunbas.dusassistant.data.local.getRoomDatabase
 import com.ilhanaltunbas.dusassistant.presentation.App
 
 class MainActivity : ComponentActivity() {
@@ -13,8 +16,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        val database = getRoomDatabase(getDatabaseBuilder(applicationContext))
+
         setContent {
-            App()
+            App(database)
         }
     }
 }
@@ -22,5 +27,5 @@ class MainActivity : ComponentActivity() {
 @Preview
 @Composable
 fun AppAndroidPreview() {
-    App()
+    // App() // Needs DusDatabase instance
 }

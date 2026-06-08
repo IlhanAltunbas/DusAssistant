@@ -1,17 +1,17 @@
 package com.ilhanaltunbas.dusassistant.data.remote
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Uygulamadan FastAPI'ye gidecek soru formatı
+// Backend'in beklediği tam yapı
 @Serializable
 data class QuestionRequest(
-    val soru: String
+    @SerialName("question") val soru: String,
+    @SerialName("history") val gecmis: List<String> = emptyList()
 )
 
-// FastAPI'den uygulamaya dönecek cevap formatı
+// Backend'in döndürdüğü tam yapı
 @Serializable
 data class AnswerResponse(
-    val durum: String,
-    val cevap: String? = null,
-    val mesaj: String? = null
+    @SerialName("answer") val answer: String? = null
 )

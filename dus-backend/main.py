@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Optional
 import uvicorn
 
-# Az önce yazdığımız rag_motoru dosyasından ana fonksiyonu içe aktarıyoruz
 from rag_motoru import asistana_sor
 
 app = FastAPI(
@@ -12,7 +12,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Güvenlik ve bağlantı ayarları (Mobil uygulamadan gelecek isteklere izin ver)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,21 +20,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Kotlin'den gelecek JSON verisinin modeli (Girdi)
+#  Mobil taraftan gelen history
 class SoruIstegi(BaseModel):
-    soru: str
+    question: str # Mobil taraftaki AskRequest içindeki isimle aynı olmalı!
+    history: Optional[List[str]] = []
 
-# Mobil uygulamanın istek atacağı ana uç nokta
 @app.post("/ask")
 async def soru_sor(istek: SoruIstegi):
     try:
-        # Kotlin'den gelen soruyu al, RAG motoruna ver, cevabı JSON olarak dön
-        yanit = asistana_sor(istek.soru)
-        return {"durum": "basarili", "cevap": yanit}
+        # Hem soruyu hem de geçmişi (history) iletiyoruz
+        yanit = asistana_sor(soru=istek.question, gecmis=istek.history)
+        # Mobil taraftaki AskResponse modelimiz {"answer": ...} bekliyor
+        return {"answer": yanit} 
     except Exception as e:
-        return {"durum": "hata", "mesaj": str(e)}
+        return {"answer": f"Backend hatası: {str(e)}"}
 
-# Sunucuyu başlatma komutu
 if __name__ == "__main__":
     print("FastAPI sunucusu başlatılıyor...")
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

@@ -2,17 +2,19 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.androidApplication)
+    id("org.jetbrains.kotlin.android")
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_11
+        jvmTarget.set(JvmTarget.JVM_11)
     }
 }
 dependencies {
     implementation(projects.shared)
+    implementation(libs.androidx.room.runtime) // Room Runtime'ı buraya da ekleyelim
 
     implementation(libs.androidx.activity.compose)
 
