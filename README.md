@@ -22,7 +22,7 @@ The project is engineered with a strict separation of concerns, dividing the cro
 * **Backend & RAG Pipeline:** Developed with FastAPI and Python. It integrates Qdrant as a vector database for high-speed semantic search and utilizes Anthropic's Claude 4.5 LLM for context-aware, clinically grounded response generation.
 
 <p align="center">
-  <img width="803" height="523" alt="Ekran görüntüsü 2026-05-30 170515" src="https://github.com/user-attachments/assets/22d05c43-299c-498a-af08-96598d151413" />
+  <img width="6865" height="1605" alt="architecture" src="https://github.com/user-attachments/assets/d880f437-6d42-4fa8-9860-5ac4455b4e48" />
 </p>
 
 ## Core Capabilities
