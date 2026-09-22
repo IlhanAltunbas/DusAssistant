@@ -8,6 +8,8 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 from qdrant_client import QdrantClient
+from tenacity import retry, stop_after_attempt, wait_exponential
+
 
 load_dotenv()
 
@@ -62,10 +64,13 @@ rag_zinciri = (
 )
 
 #Fonksiyon artık gecmis (history) listesini de alıyor.
+@retry(stop=stop_after_attempt(6), wait=wait_exponential(multiplier=1, min=2, max=20), reraise=True)
+def _zinciri_calistir(girdi: dict):
+    return rag_zinciri.invoke(girdi)
+
 def asistana_sor(soru: str, gecmis: list = None):
     print("Kaynaklar taranıyor ve cevap üretiliyor...\n")
-    
-    # Mobil taraftan gelen string geçmiş listesini LangChain mesaj objelerine çeviriyoruz
+
     chat_history_messages = []
     if gecmis:
         for msg in gecmis:
@@ -74,12 +79,13 @@ def asistana_sor(soru: str, gecmis: list = None):
             elif msg.startswith("Assistant:"):
                 chat_history_messages.append(AIMessage(content=msg.replace("Assistant: ", "", 1)))
 
-    # Zinciri çağırırken soruyu ve çevrilmiş mesaj geçmişini veriyoruz
-    cevap = rag_zinciri.invoke({
+    cevap = _zinciri_calistir({
         "question": soru,
         "chat_history": chat_history_messages
     })
     return cevap
+
+    
 
 if __name__ == "__main__":
     # Test Senaryosu
@@ -89,3 +95,5 @@ if __name__ == "__main__":
     print(f"Soru: {test_sorusu}")
     yanit = asistana_sor(test_sorusu, test_gecmis)
     print("Asistanın Cevabı:", yanit)
+
+    
