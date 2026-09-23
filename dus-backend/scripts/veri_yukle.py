@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -51,7 +53,7 @@ def pdf_isle_ve_qdranta_gonder(pdf_yolu, qdrant):
     print(f"'{pdf_yolu}' başarıyla eklendi!")
 
 if __name__ == "__main__":
-    klasor_yolu = "kaynaklar"
+    klasor_yolu = str(Path(__file__).resolve().parent.parent / "kaynaklar")
     collection_name = "periodontoloji_notlari"
 
     print("İşlem başlıyor. Qdrant'a bağlanılıyor...")

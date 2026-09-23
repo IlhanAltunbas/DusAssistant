@@ -2,13 +2,14 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Qdrant
-from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 from qdrant_client import QdrantClient
 from tenacity import retry, stop_after_attempt, wait_exponential
+
+from .providers.factory import get_llm
 
 
 load_dotenv()
@@ -26,10 +27,7 @@ def retriever_olustur(collection_name="periodontoloji_notlari"):
     )
     return qdrant.as_retriever(search_kwargs={"k": 5})
 
-llm = ChatAnthropic(
-    model_name="claude-haiku-4-5-20251001", 
-    temperature=0
-)
+llm = get_llm()
 
 #Promptu sadece System (Kurallar) seviyesine taşıdık.
 system_template = """Sen uzman bir DUS (Diş Hekimliğinde Uzmanlık Sınavı) Periodontoloji asistanısın.

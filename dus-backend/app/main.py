@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
 
-from rag_motoru import asistana_sor
+from .rag_motoru import asistana_sor
 
 app = FastAPI(
     title="DUS Periodontoloji Asistanı API",
@@ -37,4 +37,4 @@ async def soru_sor(istek: SoruIstegi):
 
 if __name__ == "__main__":
     print("FastAPI sunucusu başlatılıyor...")
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
