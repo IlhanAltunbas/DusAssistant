@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
 
-from .rag_motoru import asistana_sor
+from .rag_motoru import GECICI_HATALAR, asistana_sor
 
 app = FastAPI(
     title="DUS Periodontoloji Asistanı API",
@@ -31,7 +31,9 @@ async def soru_sor(istek: SoruIstegi):
         # Hem soruyu hem de geçmişi (history) iletiyoruz
         yanit = asistana_sor(soru=istek.question, gecmis=istek.history)
         # Mobil taraftaki AskResponse modelimiz {"answer": ...} bekliyor
-        return {"answer": yanit} 
+        return {"answer": yanit}
+    except GECICI_HATALAR:
+        return {"answer": "Şu an yoğunluk veya bağlantı sorunu yaşıyoruz, birkaç saniye sonra tekrar dener misin?"}
     except Exception as e:
         return {"answer": f"Backend hatası: {str(e)}"}
 

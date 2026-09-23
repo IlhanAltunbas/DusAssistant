@@ -7,9 +7,22 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 from qdrant_client import QdrantClient
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+import anthropic
+import openai
 
 from .providers.factory import get_llm
+
+# Rate limit, timeout ve bağlantı kopması gibi geçici hatalar - bunlarda tekrar denemek mantıklı.
+# Auth/quota/geçersiz istek gibi kalıcı hatalarda tekrar denemek sadece kullanıcıyı bekletir.
+GECICI_HATALAR = (
+    anthropic.RateLimitError,
+    anthropic.APITimeoutError,
+    anthropic.APIConnectionError,
+    openai.RateLimitError,
+    openai.APITimeoutError,
+    openai.APIConnectionError,
+)
 
 
 load_dotenv()
@@ -62,7 +75,12 @@ rag_zinciri = (
 )
 
 #Fonksiyon artık gecmis (history) listesini de alıyor.
-@retry(stop=stop_after_attempt(6), wait=wait_exponential(multiplier=1, min=2, max=20), reraise=True)
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=2, max=20),
+    retry=retry_if_exception_type(GECICI_HATALAR),
+    reraise=True,
+)
 def _zinciri_calistir(girdi: dict):
     return rag_zinciri.invoke(girdi)
 
