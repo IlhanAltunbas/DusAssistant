@@ -15,3 +15,6 @@ local.properties
 Thumbs.db
 
 .env
+
+# RAG kaynak dokümanları (yerelde tutulur)
+dus-backend/kaynaklar/
