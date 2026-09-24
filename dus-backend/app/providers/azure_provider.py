@@ -13,4 +13,6 @@ class AzureOpenAIProvider(LLMProvider):
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
             azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
             temperature=1,
+            # gpt-5 ailesi reasoning modeli: varsayılan ayarda cevap süresinin yarısı gizli düşünmeye gidiyor.
+            model_kwargs={"reasoning_effort": os.getenv("AZURE_OPENAI_REASONING_EFFORT", "low")},
         )
