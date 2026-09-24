@@ -13,3 +13,4 @@ openai==1.109.1
 tenacity==8.5.0
 numpy==1.26.4
 httpx==0.28.1
+azure-search-documents==11.6.0

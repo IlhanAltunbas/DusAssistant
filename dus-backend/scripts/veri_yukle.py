@@ -1,83 +1,114 @@
 import os
 from pathlib import Path
 
+from azure.core.credentials import AzureKeyCredential
+from azure.search.documents import SearchClient
+from azure.search.documents.indexes import SearchIndexClient
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Qdrant
+from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
-# 1. .env dosyasındaki gizli anahtarları sisteme yükle
+from app.retrievers.azure_search_retriever import azure_search_embeddings, index_adi, index_semasi
+
 load_dotenv()
 
-QDRANT_URL = os.getenv("QDRANT_URL")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+KAYNAK_KLASORU = Path(__file__).resolve().parent.parent / "kaynaklar"
+QDRANT_COLLECTION = "periodontoloji_notlari"
 
-def veritabanini_sifirla(client, collection_name):
-    # Eğer koleksiyon varsa sil (Duplicate/Çift veri oluşumunu engellemek için)
-    try:
-        client.get_collection(collection_name)
-        print(f"Eski '{collection_name}' koleksiyonu bulundu. Temizleniyor...")
-        client.delete_collection(collection_name)
-    except:
-        pass # Koleksiyon yoksa yola devam et
 
-    # Yepyeni, tertemiz bir koleksiyon oluştur
-    print(f"Yeni '{collection_name}' koleksiyonu oluşturuluyor...")
-    client.create_collection(
-        collection_name=collection_name,
-        vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
-    )
+def pdfleri_parcala(klasor: Path):
+    pdf_dosyalari = sorted(klasor.glob("*.pdf"))
+    if not pdf_dosyalari:
+        raise SystemExit(f"Hata: '{klasor}' klasöründe hiç PDF dosyası bulunamadı!")
 
-def pdf_isle_ve_qdranta_gonder(pdf_yolu, qdrant):
-    print(f"\n---> İşleniyor: {pdf_yolu} ")
-    loader = PyPDFLoader(pdf_yolu)
-    sayfalar = loader.load()
-    
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=150,
         length_function=len,
         separators=["\n\n", "\n", ". ", " ", ""],
-        add_start_index=True
+        add_start_index=True,
     )
-    
-    parcalar = text_splitter.split_documents(sayfalar)
-    print(f"Toplam {len(parcalar)} adet parça oluşturuldu. Veritabanına gönderiliyor...")
-    
-    # Parçaları vektöre çevirip Qdrant'a ekle
+
+    parcalar = []
+    for pdf in pdf_dosyalari:
+        print(f"---> İşleniyor: {pdf.name}")
+        sayfa_parcalari = text_splitter.split_documents(PyPDFLoader(str(pdf)).load())
+        print(f"     {len(sayfa_parcalari)} parça")
+        parcalar.extend(sayfa_parcalari)
+    return parcalar
+
+
+def qdranta_yukle(parcalar):
+    client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
+
+    # Koleksiyon varsa silinir, çift veri oluşmasın.
+    if client.collection_exists(QDRANT_COLLECTION):
+        print(f"Eski '{QDRANT_COLLECTION}' koleksiyonu siliniyor...")
+        client.delete_collection(QDRANT_COLLECTION)
+    client.create_collection(
+        collection_name=QDRANT_COLLECTION,
+        vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+    )
+
+    qdrant = Qdrant(
+        client=client,
+        collection_name=QDRANT_COLLECTION,
+        embeddings=OpenAIEmbeddings(model="text-embedding-3-small"),
+    )
     qdrant.add_documents(parcalar)
-    print(f"'{pdf_yolu}' başarıyla eklendi!")
+
+
+def azure_searche_yukle(parcalar):
+    endpoint = os.environ["AZURE_SEARCH_ENDPOINT"]
+    kimlik = AzureKeyCredential(os.environ["AZURE_SEARCH_ADMIN_KEY"])
+    ad = index_adi()
+
+    # İndeks varsa silinir, şema değişikliği ve çift veri sorunu olmasın.
+    index_client = SearchIndexClient(endpoint=endpoint, credential=kimlik)
+    if ad in list(index_client.list_index_names()):
+        print(f"Eski '{ad}' indeksi siliniyor...")
+        index_client.delete_index(ad)
+    index_client.create_index(index_semasi())
+
+    print("Embedding'ler üretiliyor...")
+    vektorler = azure_search_embeddings().embed_documents([p.page_content for p in parcalar])
+
+    belgeler = [
+        {
+            "id": str(i),
+            "content": parca.page_content,
+            "source": Path(parca.metadata.get("source", "")).name,
+            "page": parca.metadata.get("page"),
+            "embedding": vektor,
+        }
+        for i, (parca, vektor) in enumerate(zip(parcalar, vektorler))
+    ]
+
+    search_client = SearchClient(endpoint=endpoint, index_name=ad, credential=kimlik)
+    basarisiz = 0
+    for i in range(0, len(belgeler), 500):
+        sonuclar = search_client.upload_documents(belgeler[i : i + 500])
+        basarisiz += sum(1 for s in sonuclar if not s.succeeded)
+        print(f"     {min(i + 500, len(belgeler))}/{len(belgeler)} yüklendi")
+    if basarisiz:
+        raise SystemExit(f"Hata: {basarisiz} belge yüklenemedi.")
+
+
+HEDEFLER = {
+    "qdrant": qdranta_yukle,
+    "azure_search": azure_searche_yukle,
+}
 
 if __name__ == "__main__":
-    klasor_yolu = str(Path(__file__).resolve().parent.parent / "kaynaklar")
-    collection_name = "periodontoloji_notlari"
+    hedef = os.getenv("VECTOR_STORE", "qdrant").lower()
+    if hedef not in HEDEFLER:
+        raise SystemExit(f"Bilinmeyen VECTOR_STORE: '{hedef}'. Geçerli seçenekler: {list(HEDEFLER)}")
 
-    print("İşlem başlıyor. Qdrant'a bağlanılıyor...")
-    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-    # 1. Eski veritabanını temizle
-    veritabanini_sifirla(client, collection_name)
-
-    # 2. Qdrant nesnemizi oluştur
-    qdrant = Qdrant(client=client, collection_name=collection_name, embeddings=embeddings)
-
-    # 3. 'kaynaklar' klasöründeki tüm PDF'leri bul ve döngüye sok
-    if os.path.exists(klasor_yolu):
-        pdf_dosyalari = [f for f in os.listdir(klasor_yolu) if f.endswith('.pdf')]
-        
-        if not pdf_dosyalari:
-            print(f"Hata: '{klasor_yolu}' klasöründe hiç PDF dosyası bulunamadı!")
-        else:
-            print(f"Toplam {len(pdf_dosyalari)} adet PDF bulundu. Yükleme başlıyor...\n")
-            for dosya_adi in pdf_dosyalari:
-                tam_yol = os.path.join(klasor_yolu, dosya_adi)
-                pdf_isle_ve_qdranta_gonder(tam_yol, qdrant)
-                
-            print("\nTEBRİKLER! Tüm PDF'ler başarıyla parçalandı ve vektör veritabanına kaydedildi.")
-    else:
-        print(f"Hata: '{klasor_yolu}' klasörü bulunamadı. Lütfen klasörün var olduğundan emin ol.")
+    parcalar = pdfleri_parcala(KAYNAK_KLASORU)
+    print(f"\nToplam {len(parcalar)} parça. Hedef: {hedef}\n")
+    HEDEFLER[hedef](parcalar)
+    print("\nTamamlandı.")

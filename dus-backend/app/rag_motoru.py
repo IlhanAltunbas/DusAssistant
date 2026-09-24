@@ -1,17 +1,14 @@
-import os
 from dotenv import load_dotenv
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Qdrant
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
-from qdrant_client import QdrantClient
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 import anthropic
 import openai
 
 from .providers.factory import get_llm
+from .retrievers.factory import get_retriever
 
 # Rate limit, timeout ve bağlantı kopması gibi geçici hatalar - bunlarda tekrar denemek mantıklı.
 # Auth/quota/geçersiz istek gibi kalıcı hatalarda tekrar denemek sadece kullanıcıyı bekletir.
@@ -26,19 +23,6 @@ GECICI_HATALAR = (
 
 
 load_dotenv()
-
-QDRANT_URL = os.getenv("QDRANT_URL")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-
-def retriever_olustur(collection_name="periodontoloji_notlari"):
-    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    qdrant = Qdrant(
-        client=client, 
-        collection_name=collection_name, 
-        embeddings=embeddings
-    )
-    return qdrant.as_retriever(search_kwargs={"k": 5})
 
 llm = get_llm()
 
@@ -62,7 +46,7 @@ prompt = ChatPromptTemplate.from_messages([
 def dokumanlari_birlestir(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
-retriever = retriever_olustur()
+retriever = get_retriever()
 
 # Zinciri oluşturuyoruz
 rag_zinciri = (
