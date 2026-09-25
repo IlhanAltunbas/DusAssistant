@@ -2,6 +2,7 @@ package com.ilhanaltunbas.dusassistant.data.remote
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
@@ -16,6 +17,11 @@ import kotlinx.serialization.json.Json
 class DusApiClient {
 
     private val client = HttpClient {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 90_000
+            connectTimeoutMillis = 90_000
+            socketTimeoutMillis = 90_000
+        }
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true
@@ -32,7 +38,7 @@ class DusApiClient {
         }
     }
 
-    private val baseUrl = "https://smite-anyone-dividing.ngrok-free.dev"
+    private val baseUrl = "https://dus-backend.wittysand-a01d0f70.francecentral.azurecontainerapps.io"
 
     suspend fun askQuestion(question: String, history: List<String>): Result<String> {
         return try {
