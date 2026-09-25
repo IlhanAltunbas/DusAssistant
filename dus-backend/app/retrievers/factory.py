@@ -10,7 +10,7 @@ _RETRIEVERS = {
 
 
 def get_retriever():
-    store_adi = os.getenv("VECTOR_STORE", "qdrant").lower()
+    store_adi = os.getenv("VECTOR_STORE", "azure_search").lower()
     try:
         olustur = _RETRIEVERS[store_adi]
     except KeyError:

@@ -10,7 +10,7 @@ _PROVIDERS = {
 
 
 def get_llm():
-    provider_adi = os.getenv("LLM_PROVIDER", "claude").lower()
+    provider_adi = os.getenv("LLM_PROVIDER", "azure").lower()
     try:
         provider_sinifi = _PROVIDERS[provider_adi]
     except KeyError:

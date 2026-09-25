@@ -104,9 +104,17 @@ HEDEFLER = {
 }
 
 if __name__ == "__main__":
-    hedef = os.getenv("VECTOR_STORE", "qdrant").lower()
+    hedef = os.getenv("VECTOR_STORE", "azure_search").lower()
     if hedef not in HEDEFLER:
         raise SystemExit(f"Bilinmeyen VECTOR_STORE: '{hedef}'. Geçerli seçenekler: {list(HEDEFLER)}")
+
+    if hedef == "azure_search":
+        onay = input(
+            f"UYARI: Canlıdaki '{index_adi()}' indeksi silinip yeniden oluşturulacak. "
+            "Yükleme bitene kadar uygulama kaynak bulamaz. Devam etmek için 'evet' yaz: "
+        )
+        if onay.strip().lower() != "evet":
+            raise SystemExit("İptal edildi, hiçbir şey değişmedi.")
 
     parcalar = pdfleri_parcala(KAYNAK_KLASORU)
     print(f"\nToplam {len(parcalar)} parça. Hedef: {hedef}\n")
