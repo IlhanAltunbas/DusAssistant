@@ -33,8 +33,10 @@ class SoruIstegi(BaseModel):
 
 # Kontroller fonksiyon çalışmadan önce, bu sırayla yapılır; reddedilen istek LLM'e hiç ulaşmaz.
 # Anahtar önce: anahtarsız istekler sayaçları doldurup gerçek kullanıcıların kotasını tüketemesin.
+# async def değil düz def: asistana_sor bloklayan bir çağrı. Düz def ile FastAPI isteği thread havuzunda
+# çalıştırır; async def olsaydı cevap üretilirken event loop kilitlenir, diğer tüm istekler sırada beklerdi.
 @app.post("/ask", dependencies=[Depends(api_anahtarini_dogrula), Depends(istek_sinirini_uygula)])
-async def soru_sor(istek: SoruIstegi):
+def soru_sor(istek: SoruIstegi):
     try:
         # Hem soruyu hem de geçmişi (history) iletiyoruz
         yanit = asistana_sor(soru=istek.question, gecmis=istek.history)
