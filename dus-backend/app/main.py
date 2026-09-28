@@ -1,11 +1,12 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
 
+from .guvenlik import api_anahtarini_dogrula
 from .rag_motoru import GECICI_HATALAR, asistana_sor
 
 # uvicorn'un kendi logger'ı: mesajlar container loglarına düşer.
@@ -30,7 +31,8 @@ class SoruIstegi(BaseModel):
     question: str # Mobil taraftaki AskRequest içindeki isimle aynı olmalı!
     history: Optional[List[str]] = []
 
-@app.post("/ask")
+# Anahtar kontrolü fonksiyon çalışmadan önce yapılır; geçersiz istek LLM'e hiç ulaşmaz.
+@app.post("/ask", dependencies=[Depends(api_anahtarini_dogrula)])
 async def soru_sor(istek: SoruIstegi):
     try:
         # Hem soruyu hem de geçmişi (history) iletiyoruz
