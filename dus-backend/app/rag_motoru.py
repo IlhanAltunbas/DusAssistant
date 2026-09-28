@@ -3,22 +3,25 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 import anthropic
 import openai
 
 from .providers.factory import get_llm
 from .retrievers.factory import get_retriever
 
-# Rate limit, timeout ve bağlantı kopması gibi geçici hatalar - bunlarda tekrar denemek mantıklı.
-# Auth/quota/geçersiz istek gibi kalıcı hatalarda tekrar denemek sadece kullanıcıyı bekletir.
+# Tekrar deneme tek katmanda, SDK'ların içinde yapılır: openai, anthropic ve Azure AI Search istemcileri
+# geçici hatalarda (429, 408, 5xx, bağlantı) sadece başarısız çağrıyı tekrar dener ve Retry-After'a uyar.
+# Üstüne ikinci bir retry katmanı eklemek denemeleri katlıyordu (1 soru -> 12 LLM isteği).
+# Bu liste SDK denemeleri tükendikten sonra kullanıcıya hangi mesajın gösterileceğine karar verir.
 GECICI_HATALAR = (
     anthropic.RateLimitError,
     anthropic.APITimeoutError,
     anthropic.APIConnectionError,
+    anthropic.InternalServerError,
     openai.RateLimitError,
     openai.APITimeoutError,
     openai.APIConnectionError,
+    openai.InternalServerError,
 )
 
 
@@ -59,15 +62,6 @@ rag_zinciri = (
 )
 
 #Fonksiyon artık gecmis (history) listesini de alıyor.
-@retry(
-    stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=1, min=2, max=20),
-    retry=retry_if_exception_type(GECICI_HATALAR),
-    reraise=True,
-)
-def _zinciri_calistir(girdi: dict):
-    return rag_zinciri.invoke(girdi)
-
 def asistana_sor(soru: str, gecmis: list = None):
     print("Kaynaklar taranıyor ve cevap üretiliyor...\n")
 
@@ -79,7 +73,7 @@ def asistana_sor(soru: str, gecmis: list = None):
             elif msg.startswith("Assistant:"):
                 chat_history_messages.append(AIMessage(content=msg.replace("Assistant: ", "", 1)))
 
-    cevap = _zinciri_calistir({
+    cevap = rag_zinciri.invoke({
         "question": soru,
         "chat_history": chat_history_messages
     })

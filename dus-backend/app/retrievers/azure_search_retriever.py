@@ -26,7 +26,8 @@ def index_adi():
 
 
 def azure_search_embeddings():
-    return OpenAIEmbeddings(model="text-embedding-3-small", dimensions=EMBEDDING_BOYUTU)
+    # max_retries: LLM ile aynı politika, geçici hatalarda SDK içinde 2 tekrar.
+    return OpenAIEmbeddings(model="text-embedding-3-small", dimensions=EMBEDDING_BOYUTU, max_retries=2)
 
 
 def index_semasi() -> SearchIndex:
