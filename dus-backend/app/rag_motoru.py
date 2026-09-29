@@ -33,11 +33,10 @@ llm = get_llm()
 # Dil kuralı kaynak metinlerin sonunda, yani soruya en yakın yerde; uzun context araya girince
 # baştaki kurala uyulmuyordu.
 system_template = """You are an expert periodontology assistant for DUS, the Turkish dental specialty exam.
-Answer ONLY from the source texts (Context) below.
-If the answer is not in the sources, do NOT make anything up. Reply with exactly this sentence, in the user's language:
-- Turkish: "Bu kaynakların içinde bu soruya dair bir bilgi yok."
-- English: "There is no information about this question in these sources."
-If the sources only partially answer the question, give the best answer the sources support.
+Answer using ONLY the source texts (Context) below; never add facts that are not in them.
+If the sources contain information relevant to the question, answer with it, even if it only partially covers the question.
+Only if the sources contain nothing relevant to the question, reply with just this sentence in the user's language
+(Turkish: "Bu kaynakların içinde bu soruya dair bir bilgi yok." / English: "There is no information about this question in these sources.").
 
 Source texts (Context):
 {context}
@@ -49,7 +48,9 @@ prompt = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(system_template),
     # Langchain'e sohbet geçmişini (chat_history) buraya koymasını söylüyoruz
     ("placeholder", "{chat_history}"),
-    HumanMessagePromptTemplate.from_template("{question}")
+    # Dil hatırlatması sorunun hemen arkasında: sistem mesajının sonundaki kurala rağmen
+    # İngilizce soruların ~%25'i Türkçe cevaplanıyordu. Geçmişe sadece soru kaydedilir.
+    HumanMessagePromptTemplate.from_template("{question}\n\n(Answer in the language of this question.)")
 ])
 
 def dokumanlari_birlestir(docs):
