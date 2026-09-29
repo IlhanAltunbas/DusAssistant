@@ -66,8 +66,9 @@ Adding a new provider means adding one class and registering it in the factory; 
 |---|---|
 | Chunking | Recursive character splitting, 1000 characters with 150 overlap, 7,198 chunks from 4 source documents |
 | Embeddings | OpenAI `text-embedding-3-small` (512 dimensions for Azure AI Search, 1536 for Qdrant) |
+| Query rewriting | Follow-up questions ("which of these is the strongest?") are rewritten into standalone questions from the chat history before retrieval; the first question skips this step |
 | Retrieval | Top-5 nearest neighbours, HNSW index on Azure AI Search |
-| Generation | System prompt restricts answers to the retrieved context and requires an explicit "not in the sources" reply otherwise |
+| Generation | System prompt restricts answers to the retrieved context and requires an explicit "not in the sources" reply otherwise; answers in the language of the question (Turkish or English) |
 
 ### Knowledge base ingestion
 
@@ -86,6 +87,8 @@ flowchart LR
 * **Measuring latency before optimizing it.** Profiling showed ~85% of response time was LLM generation, and that over half of gpt-5-mini's output tokens were hidden reasoning tokens. Setting `reasoning_effort=low` roughly halved generation time while keeping answer detail.
 * **One retry layer, and only for what can recover.** Rate limits, timeouts, connection and 5xx errors are retried inside the provider SDKs, which retry only the failed call and honour `Retry-After`; permanent errors (invalid credentials, missing deployment) fail immediately. An earlier application-level retry on top of the SDKs multiplied attempts: a load test against a stub returning 429 showed one question producing 12 LLM requests, and each retry also repeated the embedding and search steps. Removing it brought this down to 3.
 * **Least privilege for secrets.** Production receives only the three keys it needs, stored as Container App secrets. The API queries Azure AI Search with a read-only query key; the admin key is used only by the offline ingestion script. No secrets are baked into the image.
+* **Protecting a public endpoint from cost abuse.** `/ask` requires an app API key (compared in constant time; the API refuses to start without one) and enforces sliding-window rate limits per client IP and globally per day, which caps the worst-case daily LLM bill. The key is checked first so unauthenticated traffic cannot exhaust the quota. Behind the Azure ingress proxy the socket address belongs to the proxy, so the client IP is taken from the rightmost `X-Forwarded-For` entry, the one the proxy appends and the client cannot forge. On the mobile side the key comes from the git-ignored `local.properties` and is masked in HTTP logs.
+* **Not blocking the event loop.** The RAG chain is synchronous, so `/ask` is a plain `def` endpoint that FastAPI runs in its thread pool. As an `async def` it had serialised all traffic: a request rejected in 0.01 s waited almost 4 s behind another user's answer.
 * **No internal details in API responses.** Clients receive a generic error message; full exceptions go to the server logs.
 * **Zero fixed infrastructure cost.** Free tiers, scale-to-zero, and a public container image (it contains only code, no data or secrets). The trade-off is a cold start of roughly 15-30 seconds after idle periods, covered by a 90-second client timeout.
 * **Immutable image tags.** Deployments use versioned tags (`v1`, `v2`, ...) rather than `latest`, so the running version is always known and rollback is a single command.
@@ -137,7 +140,13 @@ docker compose --profile qdrant up -d
 
 ### 4. Run the mobile app
 
-Open the `DusAssistant/` directory in Android Studio. The backend URL is configured in `shared/src/commonMain/kotlin/com/ilhanaltunbas/dusassistant/data/remote/DusApiClient.kt`.
+Open the `DusAssistant/` directory in Android Studio and add the backend's `APP_API_KEY` to `DusAssistant/local.properties` (git-ignored):
+
+```properties
+dus.apiKey=<same value as APP_API_KEY>
+```
+
+The build fails with a clear message if it is missing. The backend URL is configured in `shared/src/commonMain/kotlin/com/ilhanaltunbas/dusassistant/data/remote/DusApiClient.kt`.
 
 ## Deployment (Azure Container Apps)
 
@@ -191,7 +200,7 @@ DusAssistant/
 ## Roadmap
 
 * **Streaming responses** so answers appear token by token instead of after full generation.
-* **API protection:** app-level API key and rate limiting, then user authentication and Play Integrity for a public release.
+* **Per-user protection for a public release:** user authentication and Play Integrity / App Attest, since an app-embedded key can be extracted from the binary.
 * **Managed identity** instead of API keys for Azure OpenAI and Azure AI Search.
 * **Agent layer** with Semantic Kernel for tool calling and query routing.
 
