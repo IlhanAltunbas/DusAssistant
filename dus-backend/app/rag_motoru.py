@@ -57,10 +57,32 @@ def dokumanlari_birlestir(docs):
 
 retriever = get_retriever()
 
+# Arama sadece son soruyu görür. "Bunlardan hangisi en güçlüsü?" gibi bir takip sorusunda konu
+# (periodontitis) sorguda geçmediği için doğru parça geriye düşüyordu. Geçmiş varsa soru önce
+# geçmişe bakmadan anlaşılır hale getirilir; cevabı üreten LLM ise orijinal soruyu ve geçmişi görür.
+yeniden_yazma_promptu = ChatPromptTemplate.from_messages([
+    ("system", "Rewrite the user's latest question as a standalone question that can be understood "
+               "without the chat history, replacing words like 'these' or 'it' with what they refer to. "
+               "Keep the language of the question. Do NOT answer it. If it is already standalone, "
+               "return it unchanged. Return only the question."),
+    ("placeholder", "{chat_history}"),
+    ("human", "{question}"),
+])
+sorgu_yeniden_yazici = yeniden_yazma_promptu | llm | StrOutputParser()
+
+
+def arama_sorgusu(girdi: dict) -> str:
+    # İlk soruda geçmiş yok; ek LLM çağrısına gerek yok.
+    if not girdi.get("chat_history"):
+        return girdi["question"]
+    return sorgu_yeniden_yazici.invoke(girdi)
+
+
 # Zinciri oluşturuyoruz
 rag_zinciri = (
-    RunnablePassthrough.assign(
-        context=lambda x: dokumanlari_birlestir(retriever.invoke(x["question"]))
+    RunnablePassthrough.assign(arama_sorgusu=arama_sorgusu)
+    | RunnablePassthrough.assign(
+        context=lambda x: dokumanlari_birlestir(retriever.invoke(x["arama_sorgusu"]))
     )
     | prompt
     | llm
