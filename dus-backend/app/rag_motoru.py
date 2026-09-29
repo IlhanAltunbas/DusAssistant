@@ -29,14 +29,20 @@ load_dotenv()
 
 llm = get_llm()
 
-#Promptu sadece System (Kurallar) seviyesine taşıdık.
-system_template = """Sen uzman bir DUS (Diş Hekimliğinde Uzmanlık Sınavı) Periodontoloji asistanısın.
-SADECE aşağıdaki kaynak metinleri (Context) kullanarak sorulara cevap ver.
-Eğer cevap kaynaklar arasında değilse KESİNLİKLE uydurma ve şunu söyle: "Bu kaynakların içinde bu soruya dair bir bilgi yok."
-Eğer cevap kısmi olarak içeriliyorsa, kaynağa dayalı olan en iyi cevabı sağla.
+# Talimatlar İngilizce: Türkçe prompt, İngilizce sorulara da Türkçe cevap verdiriyordu.
+# Dil kuralı kaynak metinlerin sonunda, yani soruya en yakın yerde; uzun context araya girince
+# baştaki kurala uyulmuyordu.
+system_template = """You are an expert periodontology assistant for DUS, the Turkish dental specialty exam.
+Answer ONLY from the source texts (Context) below.
+If the answer is not in the sources, do NOT make anything up. Reply with exactly this sentence, in the user's language:
+- Turkish: "Bu kaynakların içinde bu soruya dair bir bilgi yok."
+- English: "There is no information about this question in these sources."
+If the sources only partially answer the question, give the best answer the sources support.
 
-Kaynak Metinler (Context):
-{context}"""
+Source texts (Context):
+{context}
+
+LANGUAGE RULE: Always write your answer in the language of the user's latest question (Turkish question -> Turkish answer, English question -> English answer). The source texts may be in a different language; translate as needed."""
 
 # ChatPromptTemplate'i mesaj tiplerine göre ayırdık
 prompt = ChatPromptTemplate.from_messages([
