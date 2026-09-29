@@ -19,6 +19,14 @@ This repository contains the source code for **DUS Assistant**, an academic grad
 
 The backend runs in production on **Azure Container Apps**, using **Azure OpenAI** for generation and **Azure AI Search** for vector retrieval, with zero fixed infrastructure cost.
 
+## Demo
+
+<p align="center">
+  <img src="docs/demo.gif" width="300" alt="DUS Assistant demo: an answer grounded in the textbooks, a follow-up question resolved from chat history, and an out-of-scope question declined" />
+</p>
+
+Recorded against the production backend. The assistant answers from the textbooks, resolves a follow-up question ("which of these...") from the chat history, and declines a question the sources do not cover instead of inventing an answer. It replies in the language of the question (Turkish or English).
+
 ## System Architecture
 
 The project is split into a cross-platform client and a provider-agnostic RAG backend:
@@ -89,6 +97,8 @@ flowchart LR
 * **Least privilege for secrets.** Production receives only the three keys it needs, stored as Container App secrets. The API queries Azure AI Search with a read-only query key; the admin key is used only by the offline ingestion script. No secrets are baked into the image.
 * **Protecting a public endpoint from cost abuse.** `/ask` requires an app API key (compared in constant time; the API refuses to start without one) and enforces sliding-window rate limits per client IP and globally per day, which caps the worst-case daily LLM bill. The key is checked first so unauthenticated traffic cannot exhaust the quota. Behind the Azure ingress proxy the socket address belongs to the proxy, so the client IP is taken from the rightmost `X-Forwarded-For` entry, the one the proxy appends and the client cannot forge. On the mobile side the key comes from the git-ignored `local.properties` and is masked in HTTP logs.
 * **Not blocking the event loop.** The RAG chain is synchronous, so `/ask` is a plain `def` endpoint that FastAPI runs in its thread pool. As an `async def` it had serialised all traffic: a request rejected in 0.01 s waited almost 4 s behind another user's answer.
+* **Testing prompt changes repeatedly, not once.** Model output varies between runs, so a prompt that passes a single manual check can still fail in production; one did, refusing most answerable questions. Prompt changes are now checked with each test question asked 16 times against the built container. Asking the model to "answer in the language of the question" still produced Turkish answers to some English questions; detecting the language in code and giving an explicit instruction brought this to 96/96.
+* **Per-step latency logging.** Each request logs how long query rewriting, retrieval and generation took (without the question text). This showed retrieval stays under a second while Azure OpenAI latency varies between 2 and 40+ seconds under concurrent load, and that the rewrite step dropped to ~1.3 s once it ran without reasoning.
 * **No internal details in API responses.** Clients receive a generic error message; full exceptions go to the server logs.
 * **Zero fixed infrastructure cost.** Free tiers, scale-to-zero, and a public container image (it contains only code, no data or secrets). The trade-off is a cold start of roughly 15-30 seconds after idle periods, covered by a 90-second client timeout.
 * **Immutable image tags.** Deployments use versioned tags (`v1`, `v2`, ...) rather than `latest`, so the running version is always known and rollback is a single command.
