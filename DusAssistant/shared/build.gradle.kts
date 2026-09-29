@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -8,6 +9,35 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.androidx.room)
+}
+
+// Backend'in istediği uygulama anahtarı git'e girmesin diye local.properties'ten (gitignore'da) okunur
+// ve build sırasında commonMain için bir Kotlin sabitine çevrilir. commonMain'de Android'in BuildConfig'i yok.
+val dusApiKey: String = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}.getProperty("dus.apiKey", "")
+
+val apiConfigUret by tasks.registering {
+    val cikti = layout.buildDirectory.dir("generated/apiConfig/commonMain/kotlin")
+    inputs.property("dusApiKey", dusApiKey)
+    outputs.dir(cikti)
+    doLast {
+        if (dusApiKey.isBlank()) {
+            throw GradleException("local.properties içinde dus.apiKey tanımlı değil (backend'deki APP_API_KEY ile aynı değer).")
+        }
+        val klasor = cikti.get().asFile.resolve("com/ilhanaltunbas/dusassistant/data/remote")
+        klasor.mkdirs()
+        klasor.resolve("ApiConfig.kt").writeText(
+            """
+            |package com.ilhanaltunbas.dusassistant.data.remote
+            |
+            |// Otomatik üretildi (shared/build.gradle.kts, apiConfigUret). Elle düzenleme.
+            |internal object ApiConfig {
+            |    const val API_KEY = "$dusApiKey"
+            |}
+            |""".trimMargin()
+        )
+    }
 }
 
 kotlin {
@@ -29,6 +59,9 @@ kotlin {
     }
     
     sourceSets {
+        // Üretilen ApiConfig.kt derlemeye dahil olur; derleme görevleri önce apiConfigUret'i çalıştırır.
+        commonMain { kotlin.srcDir(apiConfigUret) }
+
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)

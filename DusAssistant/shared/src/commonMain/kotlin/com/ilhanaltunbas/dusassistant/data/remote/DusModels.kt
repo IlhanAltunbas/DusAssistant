@@ -13,5 +13,7 @@ data class QuestionRequest(
 // Backend'in döndürdüğü tam yapı
 @Serializable
 data class AnswerResponse(
-    @SerialName("answer") val answer: String? = null
+    @SerialName("answer") val answer: String? = null,
+    // Hata durumunda (401, 429) FastAPI mesajı bu alanda döner.
+    @SerialName("detail") val detail: String? = null
 )
