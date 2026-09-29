@@ -1,12 +1,15 @@
+import logging
+import re
+import time
+
 from dotenv import load_dotenv
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 import anthropic
 import openai
 
-from .providers.factory import get_llm
+from .providers.factory import get_fast_llm, get_llm
 from .retrievers.factory import get_retriever
 
 # Tekrar deneme tek katmanda, SDK'ların içinde yapılır: openai, anthropic ve Azure AI Search istemcileri
@@ -27,36 +30,68 @@ GECICI_HATALAR = (
 
 load_dotenv()
 
-llm = get_llm()
+logger = logging.getLogger("uvicorn.error")
 
-# Talimatlar İngilizce: Türkçe prompt, İngilizce sorulara da Türkçe cevap verdiriyordu.
-# Dil kuralı kaynak metinlerin sonunda, yani soruya en yakın yerde; uzun context araya girince
-# baştaki kurala uyulmuyordu.
+llm = get_llm()
+hizli_llm = get_fast_llm()
+
+# ---------------------------------------------------------------------------
+# Cevap dili
+# ---------------------------------------------------------------------------
+# Dil koddan belirlenir, modele sorulmaz. "Sorunun dilinde cevap ver" talimatına rağmen model
+# İngilizce soruların bir kısmına Türkçe cevap veriyordu; açık bir "Answer in English" çok daha
+# güvenilir. Uygulama sadece Türkçe ve İngilizce destekliyor.
+_TR_HARFLER = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
+# Türkçe karakter içermeyen Türkçe sorular için ("Gingivitis nedir?").
+_TR_KELIMELER = {
+    "nedir", "nelerdir", "neden", "nedenleri", "hangi", "hangisi", "hangileri", "ne", "kac", "mi", "mu",
+    "midir", "mudur", "ve", "ile", "bu", "bunlar", "bunlardan", "bunu", "tedavi", "tedavisi", "belirtileri",
+    "tanimi", "anlat", "anlatir", "misin", "olur", "olan", "veya", "daha", "peki", "tedavisinde",
+}
+_EN_KELIMELER = {
+    "what", "which", "how", "why", "when", "where", "who", "is", "are", "was", "were", "the", "a", "an", "of",
+    "for", "does", "do", "can", "explain", "describe", "and", "in", "to", "with", "between", "list", "tell",
+    "me", "difference", "treated", "treatment", "these", "this", "it",
+}
+_DILLER = {
+    "tr": ("Turkish", "Bu kaynakların içinde bu soruya dair bir bilgi yok."),
+    "en": ("English", "There is no information about this question in these sources."),
+}
+
+
+def soru_dili(metin: str) -> str:
+    if _TR_HARFLER.search(metin):
+        return "tr"
+    kelimeler = set(re.findall(r"[a-z]+", metin.lower()))
+    if kelimeler & _TR_KELIMELER:
+        return "tr"
+    if kelimeler & _EN_KELIMELER:
+        return "en"
+    # Karar verilemezse ("Periodontitis?"): asıl kullanıcılar Türk öğrenciler.
+    return "tr"
+
+
+# ---------------------------------------------------------------------------
+# Promptlar
+# ---------------------------------------------------------------------------
 system_template = """You are an expert periodontology assistant for DUS, the Turkish dental specialty exam.
 Answer using ONLY the source texts (Context) below; never add facts that are not in them.
 If the sources contain information relevant to the question, answer with it, even if it only partially covers the question.
-Only if the sources contain nothing relevant to the question, reply with just this sentence in the user's language
-(Turkish: "Bu kaynakların içinde bu soruya dair bir bilgi yok." / English: "There is no information about this question in these sources.").
+Only if the sources contain nothing relevant to the question, reply with just this sentence: "{bilgi_yok}"
 
 Source texts (Context):
 {context}
 
-LANGUAGE RULE: Always write your answer in the language of the user's latest question (Turkish question -> Turkish answer, English question -> English answer). The source texts may be in a different language; translate as needed."""
+Write your answer in {cevap_dili}. The source texts may be in another language; translate as needed."""
 
-# ChatPromptTemplate'i mesaj tiplerine göre ayırdık
 prompt = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(system_template),
-    # Langchain'e sohbet geçmişini (chat_history) buraya koymasını söylüyoruz
     ("placeholder", "{chat_history}"),
-    # Dil hatırlatması sorunun hemen arkasında: sistem mesajının sonundaki kurala rağmen
-    # İngilizce soruların ~%25'i Türkçe cevaplanıyordu. Geçmişe sadece soru kaydedilir.
-    HumanMessagePromptTemplate.from_template("{question}\n\n(Answer in the language of this question.)")
+    # Dil talimatı sorunun hemen arkasında da tekrarlanır; uzun context araya girince sistem
+    # mesajındaki kural zayıflıyordu. Geçmişe bu not değil, sadece soru kaydedilir.
+    HumanMessagePromptTemplate.from_template("{question}\n\n(Answer in {cevap_dili}.)"),
 ])
-
-def dokumanlari_birlestir(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-retriever = get_retriever()
+cevap_zinciri = prompt | llm | StrOutputParser()
 
 # Arama sadece son soruyu görür. "Bunlardan hangisi en güçlüsü?" gibi bir takip sorusunda konu
 # (periodontitis) sorguda geçmediği için doğru parça geriye düşüyordu. Geçmiş varsa soru önce
@@ -69,46 +104,55 @@ yeniden_yazma_promptu = ChatPromptTemplate.from_messages([
     ("placeholder", "{chat_history}"),
     ("human", "{question}"),
 ])
-sorgu_yeniden_yazici = yeniden_yazma_promptu | llm | StrOutputParser()
+sorgu_yeniden_yazici = yeniden_yazma_promptu | hizli_llm | StrOutputParser()
+
+retriever = get_retriever()
 
 
-def arama_sorgusu(girdi: dict) -> str:
+def dokumanlari_birlestir(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
+def _gecmisi_cevir(gecmis: list | None) -> list:
+    mesajlar = []
+    for msg in gecmis or []:
+        if msg.startswith("User:"):
+            mesajlar.append(HumanMessage(content=msg.replace("User: ", "", 1)))
+        elif msg.startswith("Assistant:"):
+            mesajlar.append(AIMessage(content=msg.replace("Assistant: ", "", 1)))
+    return mesajlar
+
+
+def asistana_sor(soru: str, gecmis: list = None) -> str:
+    gecmis_mesajlari = _gecmisi_cevir(gecmis)
+    dil = soru_dili(soru)
+    cevap_dili, bilgi_yok = _DILLER[dil]
+
+    t0 = time.perf_counter()
     # İlk soruda geçmiş yok; ek LLM çağrısına gerek yok.
-    if not girdi.get("chat_history"):
-        return girdi["question"]
-    return sorgu_yeniden_yazici.invoke(girdi)
-
-
-# Zinciri oluşturuyoruz
-rag_zinciri = (
-    RunnablePassthrough.assign(arama_sorgusu=arama_sorgusu)
-    | RunnablePassthrough.assign(
-        context=lambda x: dokumanlari_birlestir(retriever.invoke(x["arama_sorgusu"]))
-    )
-    | prompt
-    | llm
-    | StrOutputParser()
-)
-
-#Fonksiyon artık gecmis (history) listesini de alıyor.
-def asistana_sor(soru: str, gecmis: list = None):
-    print("Kaynaklar taranıyor ve cevap üretiliyor...\n")
-
-    chat_history_messages = []
-    if gecmis:
-        for msg in gecmis:
-            if msg.startswith("User:"):
-                chat_history_messages.append(HumanMessage(content=msg.replace("User: ", "", 1)))
-            elif msg.startswith("Assistant:"):
-                chat_history_messages.append(AIMessage(content=msg.replace("Assistant: ", "", 1)))
-
-    cevap = rag_zinciri.invoke({
+    if gecmis_mesajlari:
+        arama = sorgu_yeniden_yazici.invoke({"question": soru, "chat_history": gecmis_mesajlari})
+    else:
+        arama = soru
+    t1 = time.perf_counter()
+    context = dokumanlari_birlestir(retriever.invoke(arama))
+    t2 = time.perf_counter()
+    cevap = cevap_zinciri.invoke({
         "question": soru,
-        "chat_history": chat_history_messages
+        "chat_history": gecmis_mesajlari,
+        "context": context,
+        "cevap_dili": cevap_dili,
+        "bilgi_yok": bilgi_yok,
     })
+    t3 = time.perf_counter()
+
+    # Soru metni loglanmaz (kullanıcı verisi); yavaşlığın hangi adımda olduğunu görmek için süreler.
+    logger.info(
+        "/ask dil=%s takip=%s | yeniden yazma %.1f sn, arama %.1f sn, cevap %.1f sn, toplam %.1f sn",
+        dil, bool(gecmis_mesajlari), t1 - t0, t2 - t1, t3 - t2, t3 - t0,
+    )
     return cevap
 
-    
 
 if __name__ == "__main__":
     # Test Senaryosu

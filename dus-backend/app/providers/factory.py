@@ -9,7 +9,7 @@ _PROVIDERS = {
 }
 
 
-def get_llm():
+def _provider():
     provider_adi = os.getenv("LLM_PROVIDER", "azure").lower()
     try:
         provider_sinifi = _PROVIDERS[provider_adi]
@@ -17,4 +17,12 @@ def get_llm():
         raise ValueError(
             f"Bilinmeyen LLM_PROVIDER: '{provider_adi}'. Geçerli seçenekler: {list(_PROVIDERS)}"
         )
-    return provider_sinifi().get_llm()
+    return provider_sinifi()
+
+
+def get_llm():
+    return _provider().get_llm()
+
+
+def get_fast_llm():
+    return _provider().get_fast_llm()
