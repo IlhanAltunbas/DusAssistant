@@ -1,5 +1,4 @@
 import logging
-import re
 import time
 
 from dotenv import load_dotenv
@@ -9,6 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 import anthropic
 import openai
 
+from .dil import soru_dili
 from .providers.factory import get_fast_llm, get_llm
 from .retrievers.factory import get_retriever
 
@@ -36,39 +36,12 @@ llm = get_llm()
 hizli_llm = get_fast_llm()
 
 # ---------------------------------------------------------------------------
-# Cevap dili
+# Cevap dili (tespit: dil.py)
 # ---------------------------------------------------------------------------
-# Dil koddan belirlenir, modele sorulmaz. "Sorunun dilinde cevap ver" talimatına rağmen model
-# İngilizce soruların bir kısmına Türkçe cevap veriyordu; açık bir "Answer in English" çok daha
-# güvenilir. Uygulama sadece Türkçe ve İngilizce destekliyor.
-_TR_HARFLER = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
-# Türkçe karakter içermeyen Türkçe sorular için ("Gingivitis nedir?").
-_TR_KELIMELER = {
-    "nedir", "nelerdir", "neden", "nedenleri", "hangi", "hangisi", "hangileri", "ne", "kac", "mi", "mu",
-    "midir", "mudur", "ve", "ile", "bu", "bunlar", "bunlardan", "bunu", "tedavi", "tedavisi", "belirtileri",
-    "tanimi", "anlat", "anlatir", "misin", "olur", "olan", "veya", "daha", "peki", "tedavisinde",
-}
-_EN_KELIMELER = {
-    "what", "which", "how", "why", "when", "where", "who", "is", "are", "was", "were", "the", "a", "an", "of",
-    "for", "does", "do", "can", "explain", "describe", "and", "in", "to", "with", "between", "list", "tell",
-    "me", "difference", "treated", "treatment", "these", "this", "it",
-}
 _DILLER = {
     "tr": ("Turkish", "Bu kaynakların içinde bu soruya dair bir bilgi yok."),
     "en": ("English", "There is no information about this question in these sources."),
 }
-
-
-def soru_dili(metin: str) -> str:
-    if _TR_HARFLER.search(metin):
-        return "tr"
-    kelimeler = set(re.findall(r"[a-z]+", metin.lower()))
-    if kelimeler & _TR_KELIMELER:
-        return "tr"
-    if kelimeler & _EN_KELIMELER:
-        return "en"
-    # Karar verilemezse ("Periodontitis?"): asıl kullanıcılar Türk öğrenciler.
-    return "tr"
 
 
 # ---------------------------------------------------------------------------
