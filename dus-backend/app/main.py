@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -42,13 +42,24 @@ def soru_sor(istek: SoruIstegi):
         yanit = asistana_sor(soru=istek.question, gecmis=istek.history)
         # Mobil taraftaki AskResponse modelimiz {"answer": ...} bekliyor
         return {"answer": yanit}
+    # Hatalarda mesaj yine kullanıcıya gider ("detail"), ama durum kodu hata olur: 200 dönülürse mobil
+    # uygulama mesajı asistan cevabı sanıp sohbet geçmişine kaydediyor, sonraki sorularda LLM'e geri
+    # gönderiyordu. Hata kodu, kesintilerin izlemede 5xx olarak görünmesini de sağlar.
     except GECICI_HATALAR:
         logger.warning("Geçici LLM hatası, tekrar denemeler tükendi", exc_info=True)
-        return {"answer": "Şu an yoğunluk veya bağlantı sorunu yaşıyoruz, birkaç saniye sonra tekrar dener misin?"}
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Şu an yoğunluk veya bağlantı sorunu yaşıyoruz, birkaç saniye sonra tekrar dener misin?",
+            # İstemciye ipucu; SDK zaten kendi içinde tekrar denedi.
+            headers={"Retry-After": "10"},
+        )
     except Exception:
         # Ham hata iç detay (endpoint, deployment adı vb.) içerebilir; kullanıcıya değil sadece loga yazılır.
         logger.exception("/ask isteği başarısız")
-        return {"answer": "Beklenmeyen bir hata oluştu, lütfen daha sonra tekrar dene."}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Beklenmeyen bir hata oluştu, lütfen daha sonra tekrar dene.",
+        )
 
 if __name__ == "__main__":
     print("FastAPI sunucusu başlatılıyor...")
