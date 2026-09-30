@@ -21,16 +21,6 @@ class SahteSaat:
         self.simdi += saniye
 
 
-@pytest.fixture(autouse=True)
-def sayaclari_sifirla():
-    # Sayaçlar modül düzeyinde tutuluyor; bir testin istekleri diğerine taşınmasın.
-    guvenlik._ip_istekleri.clear()
-    guvenlik._genel_istekler.clear()
-    yield
-    guvenlik._ip_istekleri.clear()
-    guvenlik._genel_istekler.clear()
-
-
 @pytest.fixture
 def saat(monkeypatch):
     sahte = SahteSaat()
