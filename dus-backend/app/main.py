@@ -1,10 +1,9 @@
 import logging
 
+import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
-import uvicorn
 
 from .guvenlik import api_anahtarini_dogrula, istek_sinirini_uygula
 from .rag_motoru import GECICI_HATALAR, asistana_sor
@@ -29,7 +28,7 @@ app.add_middleware(
 #  Mobil taraftan gelen history
 class SoruIstegi(BaseModel):
     question: str # Mobil taraftaki AskRequest içindeki isimle aynı olmalı!
-    history: Optional[List[str]] = []
+    history: list[str] | None = []
 
 # Kontroller fonksiyon çalışmadan önce, bu sırayla yapılır; reddedilen istek LLM'e hiç ulaşmaz.
 # Anahtar önce: anahtarsız istekler sayaçları doldurup gerçek kullanıcıların kotasını tüketemesin.

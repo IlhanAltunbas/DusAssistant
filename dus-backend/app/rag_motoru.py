@@ -1,12 +1,12 @@
 import logging
 import time
 
-from dotenv import load_dotenv
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.messages import HumanMessage, AIMessage
 import anthropic
 import openai
+from dotenv import load_dotenv
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
 from .dil import soru_dili
 from .providers.factory import get_fast_llm, get_llm
@@ -70,10 +70,12 @@ cevap_zinciri = prompt | llm | StrOutputParser()
 # (periodontitis) sorguda geçmediği için doğru parça geriye düşüyordu. Geçmiş varsa soru önce
 # geçmişe bakmadan anlaşılır hale getirilir; cevabı üreten LLM ise orijinal soruyu ve geçmişi görür.
 yeniden_yazma_promptu = ChatPromptTemplate.from_messages([
-    ("system", "Rewrite the user's latest question as a standalone question that can be understood "
-               "without the chat history, replacing words like 'these' or 'it' with what they refer to. "
-               "Keep the language of the question. Do NOT answer it. If it is already standalone, "
-               "return it unchanged. Return only the question."),
+    ("system", (
+        "Rewrite the user's latest question as a standalone question that can be understood "
+        "without the chat history, replacing words like 'these' or 'it' with what they refer to. "
+        "Keep the language of the question. Do NOT answer it. If it is already standalone, "
+        "return it unchanged. Return only the question."
+    )),
     ("placeholder", "{chat_history}"),
     ("human", "{question}"),
 ])
@@ -96,7 +98,7 @@ def _gecmisi_cevir(gecmis: list | None) -> list:
     return mesajlar
 
 
-def asistana_sor(soru: str, gecmis: list = None) -> str:
+def asistana_sor(soru: str, gecmis: list | None = None) -> str:
     gecmis_mesajlari = _gecmisi_cevir(gecmis)
     dil = soru_dili(soru)
     cevap_dili, bilgi_yok = _DILLER[dil]

@@ -20,9 +20,9 @@ os.environ["AZURE_SEARCH_ENDPOINT"] = "https://test.invalid"
 os.environ["AZURE_SEARCH_QUERY_KEY"] = "test"
 os.environ["OPENAI_API_KEY"] = "test"
 
-import pytest  # noqa: E402
+import pytest
 
-from app import guvenlik  # noqa: E402
+from app import guvenlik
 
 
 @pytest.fixture(autouse=True)

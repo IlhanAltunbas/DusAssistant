@@ -1,0 +1,6 @@
+# Production imajı Python 3.12; ruff modern yazım önerilerini bu sürüme göre yapar.
+target-version = "py312"
+line-length = 120
+extend-exclude = ["venv", "kaynaklar"]
+# Kural seçimi ruff'ın varsayılanı. Varsayılanlar sürümden sürüme değiştiği için ruff
+# requirements-dev.txt'te sabit sürümle kurulur: yerelde ve CI'da aynı kurallar çalışır.
