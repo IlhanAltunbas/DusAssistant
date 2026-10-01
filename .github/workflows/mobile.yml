@@ -1,0 +1,57 @@
+name: Mobile CI
+
+# Sadece mobil projeyi etkileyen değişikliklerde çalışır.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "DusAssistant/**"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "DusAssistant/**"
+      - ".github/workflows/mobile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: DusAssistant
+
+jobs:
+  test:
+    name: Shared module tests
+    # Ortak (commonTest) testler Android hedefinde, Linux'ta çalışır. iOS hedefinde çalıştırmak
+    # macOS runner ister; aynı ortak kod test edildiği için şimdilik gerekmiyor.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # AGP 8.7 ve Gradle 8.11 için JDK 17.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Gradle ve bağımlılık önbelleği.
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests
+        run: ./gradlew :shared:testDebugUnitTest
+        env:
+          # Gerçek anahtar değil: testler sahte sunucuya (MockEngine) gider, backend'e hiç istek atılmaz.
+          DUS_API_KEY: ci-test-anahtari
+
+      # Testler kırmızıysa hangi testin neden kaldığı GitHub'dan indirilebilsin.
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shared-test-report
+          path: DusAssistant/shared/build/reports/tests/testDebugUnitTest

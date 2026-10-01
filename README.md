@@ -14,6 +14,7 @@
 </p>
 
 [![Backend CI](https://github.com/IlhanAltunbas/DusAssistant/actions/workflows/backend.yml/badge.svg)](https://github.com/IlhanAltunbas/DusAssistant/actions/workflows/backend.yml)
+[![Mobile CI](https://github.com/IlhanAltunbas/DusAssistant/actions/workflows/mobile.yml/badge.svg)](https://github.com/IlhanAltunbas/DusAssistant/actions/workflows/mobile.yml)
 
 ## Abstract
 
@@ -170,6 +171,14 @@ pytest
 ```
 
 The tests replace the LLM and the vector store with stubs and point every Azure endpoint at an unresolvable `.invalid` host, so they need no credentials and cannot reach a paid service. GitHub Actions runs the same checks on every push that touches the backend, then builds the Docker image.
+
+The mobile client's networking layer is tested against Ktor's `MockEngine` (request format, API key header, and how 401/429/503 and non-JSON gateway errors reach the user), from `DusAssistant/` with JDK 17:
+
+```bash
+./gradlew :shared:testDebugUnitTest
+```
+
+CI provides a placeholder key through the `DUS_API_KEY` environment variable, since `local.properties` is not in the repository.
 
 ## Deployment (Azure Container Apps)
 
