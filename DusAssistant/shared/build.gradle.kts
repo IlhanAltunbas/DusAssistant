@@ -13,9 +13,12 @@ plugins {
 
 // Backend'in istediği uygulama anahtarı git'e girmesin diye local.properties'ten (gitignore'da) okunur
 // ve build sırasında commonMain için bir Kotlin sabitine çevrilir. commonMain'de Android'in BuildConfig'i yok.
+// CI'da local.properties olmadığı için DUS_API_KEY ortam değişkeni de kabul edilir.
 val dusApiKey: String = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-}.getProperty("dus.apiKey", "")
+}.getProperty("dus.apiKey")
+    ?: providers.environmentVariable("DUS_API_KEY").orNull
+    ?: ""
 
 val apiConfigUret by tasks.registering {
     val cikti = layout.buildDirectory.dir("generated/apiConfig/commonMain/kotlin")
@@ -23,7 +26,10 @@ val apiConfigUret by tasks.registering {
     outputs.dir(cikti)
     doLast {
         if (dusApiKey.isBlank()) {
-            throw GradleException("local.properties içinde dus.apiKey tanımlı değil (backend'deki APP_API_KEY ile aynı değer).")
+            throw GradleException(
+                "local.properties içinde dus.apiKey (ya da DUS_API_KEY ortam değişkeni) tanımlı değil " +
+                    "(backend'deki APP_API_KEY ile aynı değer)."
+            )
         }
         val klasor = cikti.get().asFile.resolve("com/ilhanaltunbas/dusassistant/data/remote")
         klasor.mkdirs()
@@ -96,7 +102,9 @@ kotlin {
         
         commonTest.dependencies {
             implementation(libs.kotlin.test)
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+            // runTest: suspend fonksiyonları testte çalıştırır. MockEngine: ağa çıkmayan sahte HTTP sunucusu.
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
         }
     }
 }

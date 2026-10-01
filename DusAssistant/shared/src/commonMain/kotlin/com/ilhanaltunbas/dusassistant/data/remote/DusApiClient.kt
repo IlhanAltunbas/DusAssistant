@@ -1,7 +1,9 @@
 package com.ilhanaltunbas.dusassistant.data.remote
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.call.body
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
@@ -16,9 +18,13 @@ import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-class DusApiClient {
+// engine null ise platformun motoru kullanılır (Android: OkHttp, iOS: Darwin). Testler sahte bir motor
+// (MockEngine) verir; ağa çıkmadan istemcinin aynı ayarlarla gerçekte ne gönderip ne yaptığı sınanır.
+class DusApiClient(engine: HttpClientEngine? = null) {
 
-    private val client = HttpClient {
+    private val client = if (engine != null) HttpClient(engine) { ayarla() } else HttpClient { ayarla() }
+
+    private fun HttpClientConfig<*>.ayarla() {
         install(HttpTimeout) {
             requestTimeoutMillis = 90_000
             connectTimeoutMillis = 90_000
