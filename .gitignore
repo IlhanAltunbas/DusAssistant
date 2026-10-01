@@ -18,3 +18,6 @@ Thumbs.db
 
 # RAG kaynak dokümanları (yerelde tutulur)
 dus-backend/kaynaklar/
+
+# Eval setinin kitap alıntılı hali ve ölçüm çıktıları (kitaplar telifli; yerelde tutulur)
+dus-backend/eval/yerel/
