@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import dataclass
 
 import anthropic
 import openai
@@ -106,7 +107,16 @@ def arama_sorgusu(soru: str, gecmis_mesajlari: list) -> str:
     return sorgu_yeniden_yazici.invoke({"question": soru, "chat_history": gecmis_mesajlari})
 
 
-def asistana_sor(soru: str, gecmis: list | None = None) -> str:
+@dataclass
+class Cevap:
+    metin: str
+    # Cevabın dayandığı parçalar; eval'deki hakem cevabın bunlara sadık olup olmadığını kontrol eder.
+    dokumanlar: list
+    sorgu: str
+    dil: str
+
+
+def cevap_uret(soru: str, gecmis: list | None = None) -> Cevap:
     gecmis_mesajlari = gecmisi_cevir(gecmis)
     dil = soru_dili(soru)
     cevap_dili, bilgi_yok = _DILLER[dil]
@@ -114,12 +124,12 @@ def asistana_sor(soru: str, gecmis: list | None = None) -> str:
     t0 = time.perf_counter()
     arama = arama_sorgusu(soru, gecmis_mesajlari)
     t1 = time.perf_counter()
-    context = dokumanlari_birlestir(retriever.invoke(arama))
+    dokumanlar = retriever.invoke(arama)
     t2 = time.perf_counter()
     cevap = cevap_zinciri.invoke({
         "question": soru,
         "chat_history": gecmis_mesajlari,
-        "context": context,
+        "context": dokumanlari_birlestir(dokumanlar),
         "cevap_dili": cevap_dili,
         "bilgi_yok": bilgi_yok,
     })
@@ -130,7 +140,11 @@ def asistana_sor(soru: str, gecmis: list | None = None) -> str:
         "/ask dil=%s takip=%s | yeniden yazma %.1f sn, arama %.1f sn, cevap %.1f sn, toplam %.1f sn",
         dil, bool(gecmis_mesajlari), t1 - t0, t2 - t1, t3 - t2, t3 - t0,
     )
-    return cevap
+    return Cevap(metin=cevap, dokumanlar=dokumanlar, sorgu=arama, dil=dil)
+
+
+def asistana_sor(soru: str, gecmis: list | None = None) -> str:
+    return cevap_uret(soru, gecmis).metin
 
 
 if __name__ == "__main__":

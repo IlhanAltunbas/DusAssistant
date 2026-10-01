@@ -44,3 +44,33 @@ Runs the 24 answerable questions through the production query path (follow-ups a
 * The question's language decides which books are retrieved: Turkish questions get Turkish chunks and English questions English chunks, so cross-lingual questions succeed mainly when the key term is the same in both languages (PRF, Periotest).
 * Turkish same-language retrieval is clearly weaker than English (MRR 0.30 vs 0.90).
 * Everything except follow-ups is deterministic across runs; follow-ups vary because the query rewrite is an LLM call, so they are reported as a range over three runs.
+
+## Answer baseline (2026-10-01)
+
+```bash
+python -m eval.cevaplar            # 28 questions x 3 runs, judge budget capped at $2.50
+```
+
+Each question is answered three times through the production code path (answers vary between runs). What code can check, code checks: the answer language and whether the assistant gave its fixed "no information" sentence. Two judgements need meaning, so an LLM judge from a different model family (Claude Sonnet 5.5; answers come from Azure OpenAI gpt-5-mini) makes them, with structured output: which key facts the answer states, and which claims in the answer the retrieved excerpts do not support. The run stops calling the judge when its estimated spend reaches the budget. This run made 53 judge calls for $0.47.
+
+| Type | Question language | Fully correct | Key facts covered* | Faithful* | Refused although answerable | Right language |
+|---|---|---|---|---|---|---|
+| Same language | EN | 60% | 70% | 73% | 0% | 100% |
+| Same language | TR | 40% | 54% | 77% | 13% | 100% |
+| Cross-lingual | EN (answer in TR books) | 40% | 83% | 78% | 40% | 100% |
+| Cross-lingual | TR (answer in EN books) | 7% | 50% | 86% | 53% | 100% |
+| Follow-up | EN | 67% | 100% | 75% | 33% | 100% |
+| Follow-up | TR | 67% | 80% | 100% | 17% | 100% |
+| **Total (72 answers)** | | **42%** | **69%** | **79%** | **26%** | **100%** |
+
+\* Among answers that did not refuse.
+
+Unanswerable questions: refused correctly in 12 of 12 answers.
+
+What the numbers and a manual check of the judge's reasoning show:
+
+* **Answer language and refusing out-of-scope questions work.** Both earlier fixes hold at 100%.
+* **Cross-lingual retrieval is the main gap.** When the answer is only in English books, a Turkish question is fully answered 7% of the time; most of the rest are honest refusals, because the right chunks were never retrieved.
+* **A page hit is not a chunk hit.** For the Ramfjord-teeth question the retriever returned the right page at rank 2, but the chunk it returned named the teeth without listing them, and the assistant correctly said the list was missing. Page-level hit@5 overstates retrieval quality.
+* **Wrong context can produce a confident wrong answer.** When the low-dose doxycycline page was not retrieved, the assistant answered with the antibacterial doxycycline regimen from another page instead of refusing. This is the cost of the instruction to answer from partial information, which was added to cut false refusals.
+* **The judge is strict.** Checked by hand on four cases it was right each time; where a key fact bundles two claims, it marks the whole fact missing if one part is absent, so scores err on the low side.
