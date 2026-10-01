@@ -13,6 +13,8 @@
   <img src="https://img.shields.io/badge/Claude%20AI-D97757?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude AI" />
 </p>
 
+[![Backend CI](https://github.com/IlhanAltunbas/DusAssistant/actions/workflows/backend.yml/badge.svg)](https://github.com/IlhanAltunbas/DusAssistant/actions/workflows/backend.yml)
+
 ## Abstract
 
 This repository contains the source code for **DUS Assistant**, an academic graduation project developed to address the limitations of Large Language Models (LLMs) in medical education. By implementing a strict Retrieval-Augmented Generation (RAG) architecture, the system provides referenced, factually accurate answers to candidates preparing for the Specialization in Dentistry Examination (DUS), specifically utilizing Periodontology textbooks as the primary knowledge base.
@@ -157,6 +159,17 @@ dus.apiKey=<same value as APP_API_KEY>
 ```
 
 The build fails with a clear message if it is missing. The backend URL is configured in `shared/src/commonMain/kotlin/com/ilhanaltunbas/dusassistant/data/remote/DusApiClient.kt`.
+
+### 5. Run the tests
+
+```bash
+cd dus-backend
+pip install -r requirements-dev.txt
+ruff check .
+pytest
+```
+
+The tests replace the LLM and the vector store with stubs and point every Azure endpoint at an unresolvable `.invalid` host, so they need no credentials and cannot reach a paid service. GitHub Actions runs the same checks on every push that touches the backend, then builds the Docker image.
 
 ## Deployment (Azure Container Apps)
 
