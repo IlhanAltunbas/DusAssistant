@@ -172,7 +172,7 @@ pytest
 
 The tests replace the LLM and the vector store with stubs and point every Azure endpoint at an unresolvable `.invalid` host, so they need no credentials and cannot reach a paid service. GitHub Actions runs the same checks on every push that touches the backend, then builds the Docker image.
 
-The mobile client's networking layer is tested against Ktor's `MockEngine` (request format, API key header, and how 401/429/503 and non-JSON gateway errors reach the user), from `DusAssistant/` with JDK 17:
+The mobile client's networking layer is tested against Ktor's `MockEngine` (request format, API key header, and how 401/429/503 and non-JSON gateway errors reach the user), from `DusAssistant/` (Gradle runs on Amazon Corretto 21, as set in `gradle/gradle-daemon-jvm.properties`; Android Studio can download it):
 
 ```bash
 ./gradlew :shared:testDebugUnitTest

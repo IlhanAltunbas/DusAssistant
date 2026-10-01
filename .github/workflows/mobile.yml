@@ -33,11 +33,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # AGP 8.7 ve Gradle 8.11 için JDK 17.
+      # gradle/gradle-daemon-jvm.properties Gradle daemon'u için Amazon Corretto 21 istiyor. Gradle 8.11
+      # bu JDK'yı kendisi indiremez; makinede yoksa build daha başlamadan durur.
       - uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: corretto
+          java-version: "21"
 
       # Gradle ve bağımlılık önbelleği.
       - uses: gradle/actions/setup-gradle@v6
