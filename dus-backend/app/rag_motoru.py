@@ -88,7 +88,7 @@ def dokumanlari_birlestir(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 
-def _gecmisi_cevir(gecmis: list | None) -> list:
+def gecmisi_cevir(gecmis: list | None) -> list:
     mesajlar = []
     for msg in gecmis or []:
         if msg.startswith("User:"):
@@ -98,17 +98,21 @@ def _gecmisi_cevir(gecmis: list | None) -> list:
     return mesajlar
 
 
+def arama_sorgusu(soru: str, gecmis_mesajlari: list) -> str:
+    # İlk soruda geçmiş yok; ek LLM çağrısına gerek yok. Eval de bu fonksiyonu kullanır,
+    # böylece ölçülen arama production'dakiyle aynıdır.
+    if not gecmis_mesajlari:
+        return soru
+    return sorgu_yeniden_yazici.invoke({"question": soru, "chat_history": gecmis_mesajlari})
+
+
 def asistana_sor(soru: str, gecmis: list | None = None) -> str:
-    gecmis_mesajlari = _gecmisi_cevir(gecmis)
+    gecmis_mesajlari = gecmisi_cevir(gecmis)
     dil = soru_dili(soru)
     cevap_dili, bilgi_yok = _DILLER[dil]
 
     t0 = time.perf_counter()
-    # İlk soruda geçmiş yok; ek LLM çağrısına gerek yok.
-    if gecmis_mesajlari:
-        arama = sorgu_yeniden_yazici.invoke({"question": soru, "chat_history": gecmis_mesajlari})
-    else:
-        arama = soru
+    arama = arama_sorgusu(soru, gecmis_mesajlari)
     t1 = time.perf_counter()
     context = dokumanlari_birlestir(retriever.invoke(arama))
     t2 = time.perf_counter()

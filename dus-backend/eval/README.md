@@ -21,3 +21,26 @@ Each line has the question, its language, the chat history if any, the PDF pages
 The quotes stay out of the repository with the books themselves (`eval/yerel/`, git-ignored), because the books are copyrighted.
 
 Because the questions were drafted by an LLM, they may be easier or more uniform than real student questions; the scores are best read as a regression baseline, not as an absolute quality claim.
+
+After the first retrieval run, two questions had the answer on pages the key did not list (the retriever had found them, at rank 1 in one case). Those pages were added to the key only after the same quote check; no question was changed to improve a score.
+
+## Retrieval baseline (2026-10-01)
+
+```bash
+python -m eval.retrieval
+```
+
+Runs the 24 answerable questions through the production query path (follow-ups are rewritten by the same LLM step first) against the live Azure AI Search index, top 5 chunks.
+
+| Type | Question language | hit@5 | MRR | Retrieved chunks TR / EN |
+|---|---|---|---|---|
+| Same language | EN | 5/5 | 0.90 | 0 / 25 |
+| Same language | TR | 3/5 | 0.30 | 25 / 0 |
+| Cross-lingual | EN (answer in TR books) | 3/5 | 0.22 | 7 / 18 |
+| Cross-lingual | TR (answer in EN books) | 2/5 | 0.13 | 19 / 6 |
+| Follow-up | EN + TR | 2–4 of 4 | 0.50–0.62 | |
+| **Total** | | **15–17/24** | **0.41–0.43** | 61 / 59 |
+
+* The question's language decides which books are retrieved: Turkish questions get Turkish chunks and English questions English chunks, so cross-lingual questions succeed mainly when the key term is the same in both languages (PRF, Periotest).
+* Turkish same-language retrieval is clearly weaker than English (MRR 0.30 vs 0.90).
+* Everything except follow-ups is deterministic across runs; follow-ups vary because the query rewrite is an LLM call, so they are reported as a range over three runs.
