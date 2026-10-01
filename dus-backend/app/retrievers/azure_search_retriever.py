@@ -68,7 +68,10 @@ class AzureSearchRetriever(BaseRetriever):
         vektor = self.embeddings.embed_query(query)
         sonuclar = self.search_client.search(
             search_text=None,
-            vector_queries=[VectorizedQuery(vector=vektor, k_nearest_neighbors=self.k, fields="embedding")],
+            # exhaustive: her vektörle tam karşılaştırma. Varsayılan yaklaşık arama (HNSW), en benzer
+            # parçayı ilk 5'te hiç getirmeyebiliyordu (Ante kanunu: tam aramada 1. sıra, HNSW'de yok).
+            # ~7 bin vektörde tam arama milisaniyeler sürüyor; indeks çok büyürse yeniden düşünülmeli.
+            vector_queries=[VectorizedQuery(vector=vektor, k_nearest_neighbors=self.k, fields="embedding", exhaustive=True)],
             select=["content", "source", "page"],
             top=self.k,
         )

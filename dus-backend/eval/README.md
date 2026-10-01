@@ -45,6 +45,8 @@ Runs the 24 answerable questions through the production query path (follow-ups a
 * Turkish same-language retrieval is clearly weaker than English (MRR 0.30 vs 0.90).
 * Everything except follow-ups is deterministic across runs; follow-ups vary because the query rewrite is an LLM call, so they are reported as a range over three runs.
 
+**Exhaustive vector search (later the same day).** Investigating a miss showed that Azure AI Search's default approximate search (HNSW) can skip the most similar chunk entirely: for the sentence defining Ante's law, exhaustive search ranks its chunk first (score 0.768) while approximate search does not return it in the top 5. With ~7,200 vectors exhaustive search is cheap, so the retriever now uses it. The retrieval numbers above did not change: none of the 24 eval questions was affected, and the real cross-lingual misses are ranking problems (the same chunk scores 0.52 against the English question and 0.36 against the Turkish one, below other chunks).
+
 ## Answer baseline (2026-10-01)
 
 ```bash
