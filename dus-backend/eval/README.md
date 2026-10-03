@@ -114,3 +114,27 @@ What this shows:
 * **Not switched yet.** For exam preparation an unsupported detail is a real cost, so the next step is a prompt change aimed at faithfulness, measured the same way, before choosing the production mode.
 
 This run used the agent before a review added three safeguards (answering malformed tool calls, at most 2 searches per round, and a provider-neutral final answer); they change behaviour only in rare paths, and the decision run will use the final code.
+
+### Faithfulness prompt and decision (2026-10-04)
+
+The agent's system prompt was changed to name the kinds of unsupported additions found above (no direction of an effect, numbers, item-by-item mappings, causes or explanations the passages do not state) and to say that information about a different substance or procedure is not relevant. Two intermediate versions were rejected along the way, both caught by code checks before a full judged run:
+
+* "Every statement must be written in the passages" made the model quote Turkish passages verbatim inside English answers (language dropped to 92%).
+* Asking it to "say which part the sources do not cover" made it describe a different gel's study for an unanswerable curcumin question instead of refusing.
+
+One judged run was lost: the eval crashed while printing a row for an unanswerable question that had been answered, before saving its results. The script now saves first; the printed rows were enough to recover the numbers quoted above.
+
+Final prompt, three runs, final code:
+
+| | Chain (2026-10-01, 3 runs) | Agent, first prompt (3 runs) | **Agent, final prompt (3 runs)** |
+|---|---|---|---|
+| Fully correct | 42% | 71% | **72%** |
+| Key facts covered* | 69% | 84% | 86% |
+| Faithful* | 79% | 64% | **77%** |
+| Refused although answerable | 26% | 3% | **4%** |
+| Right language / unanswerable refused | 100% / 12 of 12 | 100% / 12 of 12 | 100% / 12 of 12 |
+| Median answer time (slowest 10% from) | 3.0 s (5.3 s)** | 6.1 s (10.0 s) | 5.3 s (8.3 s) |
+
+\* Among answers that did not refuse. \** Chain timing from the 2026-10-03 single run.
+
+Faithfulness is back in the chain's range (72–79%) while the agent keeps its gains: 30 points more fully correct answers and almost no false refusals. Three of the 16 unfaithful answers come from one Turkish follow-up question where the model mixes up furcation grades in every run. **Decision: the agent mode goes into the next release**, at the cost of about 2 seconds more per answer.
