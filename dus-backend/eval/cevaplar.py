@@ -88,12 +88,15 @@ Judge support only against the excerpts, never against your own knowledge.
 Write gerekce as one or two sentences explaining the main reason for your judgement."""
 
 
-def cevap_dili(metin: str) -> str:
+def cevap_dili(metin: str) -> str | None:
     # Cevap uzun bir metin; soru dilinin tespitinden farklı olarak çoğunluğa bakılır. İngilizce cevapta
     # Türkçe bir terim (ç, ş...) geçmesi cevabı Türkçe yapmaz.
     kelimeler = re.findall(r"\w+", metin.casefold())
     tr = sum(k in _TR_KELIMELER or bool(re.search(r"[çğıöşü]", k)) for k in kelimeler)
     en = sum(k in _EN_KELIMELER for k in kelimeler)
+    if tr == en == 0:
+        # Dil işareti yok (ör. sadece "Jens Waerhaug (1907–1980)."): hata sayılmaz, ölçülmez.
+        return None
     return "tr" if tr > en else "en"
 
 
@@ -143,7 +146,7 @@ def bir_deneme(istemci: anthropic.Anthropic, model: str, butce: Butce, mod: str,
         return sonuc
     sonuc.update(
         cevap=cevap.metin, sorgu=cevap.sorgu,
-        dil_dogru=cevap_dili(cevap.metin) == soru["dil"],
+        dil_dogru=None if (dil := cevap_dili(cevap.metin)) is None else dil == soru["dil"],
         reddetti=reddetti_mi(cevap.metin),
     )
     if sonuc["reddetti"]:
@@ -171,6 +174,17 @@ def bir_deneme(istemci: anthropic.Anthropic, model: str, butce: Butce, mod: str,
         hakem=karar.model_dump(),
     )
     return sonuc
+
+
+def satir_durumu(s: dict) -> str:
+    if isinstance(s.get("hakem"), str):
+        return "-"
+    if s["reddetti"]:
+        return "RET"
+    if s["anahtar_kapsam"] is None:
+        # Anahtar bilgisi olmayan (cevapsız) soru reddedilmeden cevaplanmış.
+        return "CEVAPLADI"
+    return "doğru" if s["tam_dogru"] else f"kapsam {s['anahtar_kapsam']:.0%}"
 
 
 def oran(degerler: list) -> str:
@@ -241,17 +255,15 @@ def main() -> None:
     with ThreadPoolExecutor(max_workers=ESZAMANLI) as havuz:
         sonuclar = list(havuz.map(lambda is_: bir_deneme(istemci, arg.hakem, butce, arg.mod, *is_), isler))
 
-    for s in sonuclar:
-        if isinstance(s.get("hakem"), str):
-            durum = "-"
-        else:
-            durum = "RET" if s["reddetti"] else ("doğru" if s["tam_dogru"] else f"kapsam {s['anahtar_kapsam']:.0%}")
-        print(f"{s['id']:22} #{s['tekrar']}  {durum:12} sadık={s['sadik']}  dil={'ok' if s['dil_dogru'] else 'YANLIŞ'}")
-    ozet(sonuclar, arg.hakem, butce, arg.mod)
-
+    # Önce kaydedilir: yazdırma sırasında bir hata ücretli çalıştırmanın sonuçlarını kaybettirmesin
+    # (bir kez oldu: cevapsız bir soru cevaplanınca satır biçimlendirmesi çöktü, sonuçlar diske yazılmadı).
     cikti = KLASOR / "yerel" / f"cevaplar_{arg.mod}_{datetime.now(UTC):%Y%m%d_%H%M%S}.json"
     cikti.parent.mkdir(exist_ok=True)
     cikti.write_text(json.dumps(sonuclar, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    for s in sonuclar:
+        print(f"{s['id']:22} #{s['tekrar']}  {satir_durumu(s):12} sadık={s['sadik']}  dil={ {True: 'ok', False: 'YANLIŞ'}.get(s['dil_dogru'], '?') }")
+    ozet(sonuclar, arg.hakem, butce, arg.mod)
     print(f"\nAyrıntı: {cikti}")
 
 
