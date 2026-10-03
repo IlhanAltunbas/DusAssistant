@@ -5,10 +5,11 @@ from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import Qdrant
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pypdf import PdfReader
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -18,6 +19,15 @@ load_dotenv()
 
 KAYNAK_KLASORU = Path(__file__).resolve().parent.parent / "kaynaklar"
 QDRANT_COLLECTION = "periodontoloji_notlari"
+
+
+def pdf_sayfalari(pdf: Path) -> list[Document]:
+    # langchain-community'deki PyPDFLoader'ın yaptığının aynısı (paket artık bakımda değil):
+    # her sayfa ayrı belge, "page" 0'dan başlar. Mevcut indeks bu şekilde üretildi.
+    return [
+        Document(page_content=sayfa.extract_text(), metadata={"source": str(pdf), "page": i})
+        for i, sayfa in enumerate(PdfReader(pdf).pages)
+    ]
 
 
 def pdfleri_parcala(klasor: Path):
@@ -36,7 +46,7 @@ def pdfleri_parcala(klasor: Path):
     parcalar = []
     for pdf in pdf_dosyalari:
         print(f"---> İşleniyor: {pdf.name}")
-        sayfa_parcalari = text_splitter.split_documents(PyPDFLoader(str(pdf)).load())
+        sayfa_parcalari = text_splitter.split_documents(pdf_sayfalari(pdf))
         print(f"     {len(sayfa_parcalari)} parça")
         parcalar.extend(sayfa_parcalari)
     return parcalar
@@ -54,10 +64,10 @@ def qdranta_yukle(parcalar):
         vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
     )
 
-    qdrant = Qdrant(
+    qdrant = QdrantVectorStore(
         client=client,
         collection_name=QDRANT_COLLECTION,
-        embeddings=OpenAIEmbeddings(model="text-embedding-3-small"),
+        embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
     )
     qdrant.add_documents(parcalar)
 

@@ -76,3 +76,11 @@ What the numbers and a manual check of the judge's reasoning show:
 * **A page hit is not a chunk hit.** For the Ramfjord-teeth question the retriever returned the right page at rank 2, but the chunk it returned named the teeth without listing them, and the assistant correctly said the list was missing. Page-level hit@5 overstates retrieval quality.
 * **Wrong context can produce a confident wrong answer.** When the low-dose doxycycline page was not retrieved, the assistant answered with the antibacterial doxycycline regimen from another page instead of refusing. This is the cost of the instruction to answer from partial information, which was added to cut false refusals.
 * **The judge is strict.** Checked by hand on four cases it was right each time; where a key fact bundles two claims, it marks the whole fact missing if one part is absent, so scores err on the low side.
+
+## Dependency upgrade check (2026-10-03)
+
+LangChain was upgraded from 0.1 to 1.x (needed for LangGraph), together with the OpenAI SDK (1.109 → 2.54) and the Anthropic SDK (0.104 → 0.125). `langchain-community`, which is no longer maintained, was removed: PDF loading now calls `pypdf` directly the way the old loader did, and Qdrant goes through `langchain-qdrant`. The eval was used to show behaviour did not change:
+
+* **Ingestion:** re-chunking the four PDFs with the new code gives 7,198 chunks, the same as the live index, and 50 of 50 randomly sampled chunks match the indexed ones exactly (text, book and page).
+* **Retrieval:** identical to the baseline, question by question (16/24, MRR 0.42).
+* **Answers:** one run per question, inside the range of the baseline runs: fully correct 50%, key facts 77%, faithful 72%, false refusal 25%, language 100%, unanswerable refused 4 of 4. One run is too few to claim a change in either direction; the full three-run eval is repeated before the next deploy.

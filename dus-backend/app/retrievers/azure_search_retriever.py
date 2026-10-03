@@ -15,6 +15,7 @@ from azure.search.documents.models import VectorizedQuery
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_openai import OpenAIEmbeddings
+from pydantic import ConfigDict
 
 # Ücretsiz katmanın 50 MB sınırına sığmak için 1536 yerine 512 boyut.
 # Yükleme ve sorgu aynı boyutu kullanmak zorunda, bu yüzden tek yerde tanımlı.
@@ -61,8 +62,7 @@ class AzureSearchRetriever(BaseRetriever):
     embeddings: OpenAIEmbeddings
     k: int = 5
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_relevant_documents(self, query, *, run_manager):
         vektor = self.embeddings.embed_query(query)

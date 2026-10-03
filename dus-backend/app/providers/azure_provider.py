@@ -23,5 +23,5 @@ class AzureOpenAIProvider(LLMProvider):
             temperature=1,
             # Geçici hatalarda SDK'nın kendi tekrar denemesi (toplam 3 deneme); tek retry katmanı bu.
             max_retries=2,
-            model_kwargs={"reasoning_effort": reasoning_effort},
+            reasoning_effort=reasoning_effort,
         )

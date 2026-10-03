@@ -31,7 +31,7 @@ def sorulari_oku() -> list[dict]:
 def olc(soru: dict) -> dict:
     sorgu = arama_sorgusu(soru["soru"], gecmisi_cevir(soru["gecmis"]))
     dokumanlar = retriever.invoke(sorgu)
-    # Eval setinde sayfalar 1'den başlar (PDF görüntüleyici); indeks PyPDFLoader'ın 0'dan başlayan
+    # Eval setinde sayfalar 1'den başlar (PDF görüntüleyici); indeks yükleme scriptinin (pdf_sayfalari) 0'dan başlayan
     # numarasını saklar.
     getirilen = [(d.metadata["source"], d.metadata["page"] + 1) for d in dokumanlar]
     beklenen = {(k["dosya"], k["sayfa"]) for k in soru["beklenen_kaynaklar"]}
