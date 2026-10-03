@@ -13,6 +13,8 @@ os.environ["RATE_LIMIT_GLOBAL_DAY"] = "30"
 # çözülmeyen bir alan adı, yani bir test yanlışlıkla gerçek çağrı yaparsa Azure'a ulaşamaz, hemen hata verir.
 os.environ["LLM_PROVIDER"] = "azure"
 os.environ["VECTOR_STORE"] = "azure_search"
+# .env'de agent seçili olsa bile testler varsayılan modla çalışır.
+os.environ["ASSISTANT_MODE"] = "chain"
 os.environ["AZURE_OPENAI_ENDPOINT"] = "https://test.invalid"
 os.environ["AZURE_OPENAI_API_KEY"] = "test"
 os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"

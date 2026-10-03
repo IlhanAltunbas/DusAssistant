@@ -5,8 +5,9 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .asistan import asistana_sor
 from .guvenlik import api_anahtarini_dogrula, istek_sinirini_uygula
-from .rag_motoru import GECICI_HATALAR, asistana_sor
+from .rag_motoru import GECICI_HATALAR
 
 # uvicorn'un kendi logger'ı: mesajlar container loglarına düşer.
 logger = logging.getLogger("uvicorn.error")

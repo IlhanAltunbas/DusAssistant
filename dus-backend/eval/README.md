@@ -84,3 +84,33 @@ LangChain was upgraded from 0.1 to 1.x (needed for LangGraph), together with the
 * **Ingestion:** re-chunking the four PDFs with the new code gives 7,198 chunks, the same as the live index, and 50 of 50 randomly sampled chunks match the indexed ones exactly (text, book and page).
 * **Retrieval:** identical to the baseline, question by question (16/24, MRR 0.42).
 * **Answers:** one run per question, inside the range of the baseline runs: fully correct 50%, key facts 77%, faithful 72%, false refusal 25%, language 100%, unanswerable refused 4 of 4. One run is too few to claim a change in either direction; the full three-run eval is repeated before the next deploy.
+
+## Chain vs agent (2026-10-03)
+
+```bash
+python -m eval.cevaplar --mod agent      # ASSISTANT_MODE=agent, see app/ajan.py
+```
+
+The agent mode lets the model decide when and in which language to search (LangGraph; first search forced, at most 3 rounds and 2 searches per round, then an answer without tools). Both modes were run the same day under the same concurrency (4 parallel questions); answer times include it.
+
+| | Chain, 2026-10-01 (3 runs) | Chain, 2026-10-03 (1 run) | Agent, 2026-10-03 (3 runs) |
+|---|---|---|---|
+| Fully correct | 42% | 54% | **71%** |
+| Key facts covered* | 69% | 80% | 84% |
+| Faithful* | 79% | 72% | **64%** |
+| Refused although answerable | 26% | 25% | **3%** |
+| Cross-lingual TR → EN, fully correct | 7% | 20% | **60%** |
+| Right language / unanswerable refused | 100% / 12 of 12 | 100% / 4 of 4 | 100% / 12 of 12 |
+| Median answer time (slowest 10% from) | not measured | 3.0 s (5.3 s) | 6.1 s (10.0 s) |
+| Searches per question | 1 | 1 | 1.58 |
+
+\* Among answers that did not refuse.
+
+What this shows:
+
+* **The agent fixes the main gap.** Searching again in the other language takes Turkish questions whose answer is only in the English books from 7–20% to 60% fully correct, and answerable questions are almost never refused (3% instead of about 25%).
+* **It answers more, and adds more.** Faithfulness drops from 72–79% to 64%. Of the 25 answers with unsupported claims, 16 have a single one; most are small additions to correct content (a direction of an effect the excerpt did not state, "black" triangles, an explicit tooth-by-tooth mapping), and a few are textbook knowledge not in the excerpts (calling healthy sulcus fluid a transudate). The judge sees every passage the agent retrieved across its searches, which is what the answer was written from.
+* **It is about twice as slow**: one more model call per question on average.
+* **Not switched yet.** For exam preparation an unsupported detail is a real cost, so the next step is a prompt change aimed at faithfulness, measured the same way, before choosing the production mode.
+
+This run used the agent before a review added three safeguards (answering malformed tool calls, at most 2 searches per round, and a provider-neutral final answer); they change behaviour only in rare paths, and the decision run will use the final code.

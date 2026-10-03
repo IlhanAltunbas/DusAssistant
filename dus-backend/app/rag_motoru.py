@@ -114,6 +114,8 @@ class Cevap:
     dokumanlar: list
     sorgu: str
     dil: str
+    # Zincir her soruda bir kez arar; agent birden fazla arayabilir.
+    arama_sayisi: int = 1
 
 
 def cevap_uret(soru: str, gecmis: list | None = None) -> Cevap:
@@ -141,19 +143,3 @@ def cevap_uret(soru: str, gecmis: list | None = None) -> Cevap:
         dil, bool(gecmis_mesajlari), t1 - t0, t2 - t1, t3 - t2, t3 - t0,
     )
     return Cevap(metin=cevap, dokumanlar=dokumanlar, sorgu=arama, dil=dil)
-
-
-def asistana_sor(soru: str, gecmis: list | None = None) -> str:
-    return cevap_uret(soru, gecmis).metin
-
-
-if __name__ == "__main__":
-    # Test Senaryosu
-    test_gecmis = ["User: Merhaba!", "Assistant: Merhaba, ben bir Periodontoloji uzmanıyım."]
-    test_sorusu = "Ben sana az önce ne dedim?" 
-    
-    print(f"Soru: {test_sorusu}")
-    yanit = asistana_sor(test_sorusu, test_gecmis)
-    print("Asistanın Cevabı:", yanit)
-
-    

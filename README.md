@@ -68,6 +68,7 @@ Both the LLM and the vector store sit behind a small interface and a factory. Th
 |---|---|---|
 | `LLM_PROVIDER` | `azure` (Azure OpenAI, gpt-5-mini) · `claude` (Anthropic, Claude Haiku 4.5) | `azure` |
 | `VECTOR_STORE` | `azure_search` (Azure AI Search) · `qdrant` (Qdrant) | `azure_search` |
+| `ASSISTANT_MODE` | `chain` (fixed pipeline, one search per question) · `agent` (LangGraph; the model decides when and in which language to search, up to `AGENT_MAX_STEPS` rounds, default 3) | `chain` |
 
 Adding a new provider means adding one class and registering it in the factory; the RAG chain, the API and the mobile client stay untouched.
 
@@ -78,7 +79,7 @@ Adding a new provider means adding one class and registering it in the factory; 
 | Chunking | Recursive character splitting, 1000 characters with 150 overlap, 7,198 chunks from 4 source documents |
 | Embeddings | OpenAI `text-embedding-3-small` (512 dimensions for Azure AI Search, 1536 for Qdrant) |
 | Query rewriting | Follow-up questions ("which of these is the strongest?") are rewritten into standalone questions from the chat history before retrieval; the first question skips this step |
-| Retrieval | Top-5 nearest neighbours, HNSW index on Azure AI Search |
+| Retrieval | Top-5 nearest neighbours, exhaustive vector search on Azure AI Search (approximate HNSW search missed the best chunk in one case; see [`eval/README.md`](dus-backend/eval/README.md)) |
 | Generation | System prompt restricts answers to the retrieved context and requires an explicit "not in the sources" reply otherwise; answers in the language of the question (Turkish or English) |
 
 ### Knowledge base ingestion
@@ -103,6 +104,7 @@ flowchart LR
 * **Testing prompt changes repeatedly, not once.** Model output varies between runs, so a prompt that passes a single manual check can still fail in production; one did, refusing most answerable questions. Prompt changes are now checked with each test question asked 16 times against the built container. Asking the model to "answer in the language of the question" still produced Turkish answers to some English questions; detecting the language in code and giving an explicit instruction brought this to 96/96.
 * **Per-step latency logging.** Each request logs how long query rewriting, retrieval and generation took (without the question text). This showed retrieval stays under a second while Azure OpenAI latency varies between 2 and 40+ seconds under concurrent load, and that the rewrite step dropped to ~1.3 s once it ran without reasoning.
 * **Errors are errors, and reveal no internals.** When the LLM is unavailable `/ask` returns 503 with `Retry-After`, and unexpected failures return 500; both carry a user-facing message in `detail`, while full exceptions go only to the server logs. Returning these messages with 200, as an earlier version did, made the app store them in the chat as assistant answers and send them back to the LLM as history on the next question.
+* **An agent only where it measurably helps.** The fixed chain searches once, in the language of the question, so Turkish questions whose answer is only in the English books were mostly refused. An agent mode (LangGraph) lets the model search again in the other language; its limits are in code, not in the prompt (first search forced, at most 3 rounds and 2 searches per round, then an answer without tools, fallback to the chain on an empty answer), and they are unit-tested with a scripted fake model. On the 28-question eval it raised fully correct answers from 42–54% to 71% and cut false refusals from about 25% to 3%, but faithfulness fell from 72–79% to 64% and the median answer time doubled to 6 s. The chain stays the default until a faithfulness fix is measured; switching is one environment variable. Details in [`eval/README.md`](dus-backend/eval/README.md).
 * **Zero fixed infrastructure cost.** Free tiers, scale-to-zero, and a public container image (it contains only code, no data or secrets). The trade-off is a cold start of roughly 15-30 seconds after idle periods, covered by a 90-second client timeout.
 * **Immutable image tags.** Deployments use versioned tags (`v1`, `v2`, ...) rather than `latest`, so the running version is always known and rollback is a single command.
 
@@ -210,11 +212,16 @@ DusAssistant/
 └── dus-backend/
     ├── app/                       # runtime code (packaged into the image)
     │   ├── main.py                # FastAPI app, /ask endpoint
+    │   ├── asistan.py             # picks chain or agent (ASSISTANT_MODE)
     │   ├── rag_motoru.py          # RAG chain, retry policy
+    │   ├── ajan.py                # LangGraph agent with a search tool and code-enforced limits
     │   ├── providers/             # LLM interface, Azure OpenAI and Claude, factory
     │   └── retrievers/            # Azure AI Search and Qdrant retrievers, factory
     ├── scripts/                   # offline tools (not in the image)
     │   └── veri_yukle.py          # PDF ingestion into the selected vector store
+    ├── tests/                     # offline tests (stubs, no credentials)
+    ├── eval/                      # 28-question evaluation set, retrieval and answer evaluation
+    ├── deneyler/                  # experiments: the agent loop by hand and in LangGraph
     ├── Dockerfile
     ├── docker-compose.yml
     ├── requirements.txt
@@ -234,7 +241,7 @@ DusAssistant/
 * **Streaming responses** so answers appear token by token instead of after full generation.
 * **Per-user protection for a public release:** user authentication and Play Integrity / App Attest, since an app-embedded key can be extracted from the binary.
 * **Managed identity** instead of API keys for Azure OpenAI and Azure AI Search.
-* **Agent layer** with Semantic Kernel for tool calling and query routing.
+* **Tracing** of each request's steps (Langfuse), so agent decisions and latency can be inspected per request.
 
 ## Author
 

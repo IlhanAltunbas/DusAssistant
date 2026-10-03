@@ -4,6 +4,7 @@ dus-backend klasöründen çalıştırılır, .env'deki gerçek servisleri kulla
     python -m eval.cevaplar                 # 28 soru x 3 tekrar, hakem bütçesi $2.50
     python -m eval.cevaplar --sinir 2 --tekrar 1   # küçük deneme
     python -m eval.cevaplar --butce 1.0     # hakem harcaması üst sınırı ($)
+    python -m eval.cevaplar --mod agent     # agent modu (varsayılan: chain)
 
 Kodla ölçülebilenler kodla ölçülür (cevap dili, "bilgi yok" cevabı). Anlam karşılaştırması gereken
 iki şey bir LLM hakeme sorulur: anahtar bilgiler cevapta var mı, cevapta kaynaklarda olmayan iddia
@@ -12,8 +13,10 @@ var mı. Hakem, cevabı üreten modelden (Azure OpenAI) farklı bir model: kendi
 import argparse
 import json
 import re
+import statistics
 import sys
 import threading
+import time
 import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -21,12 +24,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import anthropic
-import openai
-from azure.core.exceptions import AzureError
 from pydantic import BaseModel
 
+from app.asistan import cevap_uret
 from app.dil import _EN_KELIMELER, _TR_KELIMELER
-from app.rag_motoru import Cevap, cevap_uret
+from app.rag_motoru import Cevap
 
 KLASOR = Path(__file__).parent
 # Maliyet hesabı ve bütçe sınırı için fiyatlar ($ / 1M token: girdi, çıktı).
@@ -127,12 +129,16 @@ def hakeme_sor(istemci: anthropic.Anthropic, model: str, soru: dict, cevap: Ceva
     return yanit.parsed_output, kullanim
 
 
-def bir_deneme(istemci: anthropic.Anthropic, model: str, butce: Butce, soru: dict, tekrar_no: int) -> dict:
+def bir_deneme(istemci: anthropic.Anthropic, model: str, butce: Butce, mod: str, soru: dict, tekrar_no: int) -> dict:
     sonuc = {"id": soru["id"], "tur": soru["tur"], "dil": soru["dil"], "tekrar": tekrar_no, "kullanim": None}
     bos = {"anahtar_kapsam": None, "tam_dogru": None, "sadik": None, "dil_dogru": None, "reddetti": None}
     try:
-        cevap = cevap_uret(soru["soru"], soru["gecmis"])
-    except (openai.APIError, AzureError) as e:  # tek bir servis hatası bütün çalıştırmayı düşürmesin
+        t0 = time.perf_counter()
+        cevap = cevap_uret(soru["soru"], soru["gecmis"], mod=mod)
+        sonuc.update(sure=time.perf_counter() - t0, arama_sayisi=cevap.arama_sayisi)
+    # Tek bir cevaptaki hata (servis, agent grafı, beklenmeyen veri) ücretli çalıştırmanın tamamını düşürmesin;
+    # hata türü sonuca yazılır ve özette "değerlendirilemedi" olarak görünür.
+    except Exception as e:  # noqa: BLE001
         sonuc.update(bos, cevap=None, hakem=f"cevap üretilemedi: {type(e).__name__}")
         return sonuc
     sonuc.update(
@@ -172,7 +178,7 @@ def oran(degerler: list) -> str:
     return f"{sum(degerler) / len(degerler):.0%}" if degerler else "-"
 
 
-def ozet(sonuclar: list[dict], model: str, butce: Butce) -> None:
+def ozet(sonuclar: list[dict], model: str, butce: Butce, mod: str) -> None:
     gruplar = defaultdict(list)
     for s in sonuclar:
         gruplar[(s["tur"], s["dil"])].append(s)
@@ -197,6 +203,14 @@ def ozet(sonuclar: list[dict], model: str, butce: Butce) -> None:
         print(f"\nCevapsız sorular: doğru ret {oran([s['reddetti'] for s in cevapsiz])} ({len(cevapsiz)} cevap); "
               f"reddetmeyenlerde kaynağa sadık {oran([s['sadik'] for s in cevap_verilen])}")
 
+    # Süreler ESZAMANLI istek paralel giderken ölçülür; iki mod aynı koşulda karşılaştırılır.
+    sureler = sorted(s["sure"] for s in sonuclar if s.get("sure") is not None)
+    if sureler:
+        aramalar = [s["arama_sayisi"] for s in sonuclar if s.get("arama_sayisi") is not None]
+        print(f"\nMod: {mod} | cevap süresi medyan {statistics.median(sureler):.1f} sn, "
+              f"en yavaş %10 >= {sureler[int(len(sureler) * 0.9)]:.1f} sn, en uzun {sureler[-1]:.1f} sn | "
+              f"soru başına ortalama {statistics.mean(aramalar):.2f} arama")
+
     kullanim = [s["kullanim"] for s in sonuclar if s.get("kullanim")]
     girdi = sum(k["girdi"] for k in kullanim)
     cikti = sum(k["cikti"] for k in kullanim)
@@ -215,6 +229,7 @@ def main() -> None:
     ayar.add_argument("--sinir", type=int, default=None, help="sadece ilk N soru (deneme için)")
     ayar.add_argument("--hakem", choices=list(HAKEM_FIYATLARI), default="claude-sonnet-5-5")
     ayar.add_argument("--butce", type=float, default=2.50, help="hakem harcaması üst sınırı ($)")
+    ayar.add_argument("--mod", choices=["chain", "agent"], default="chain", help="ölçülecek cevaplama yolu")
     arg = ayar.parse_args()
 
     satirlar = (KLASOR / "sorular.jsonl").read_text(encoding="utf-8").splitlines()
@@ -224,7 +239,7 @@ def main() -> None:
     isler = [(s, t) for s in sorular for t in range(1, arg.tekrar + 1)]
 
     with ThreadPoolExecutor(max_workers=ESZAMANLI) as havuz:
-        sonuclar = list(havuz.map(lambda is_: bir_deneme(istemci, arg.hakem, butce, *is_), isler))
+        sonuclar = list(havuz.map(lambda is_: bir_deneme(istemci, arg.hakem, butce, arg.mod, *is_), isler))
 
     for s in sonuclar:
         if isinstance(s.get("hakem"), str):
@@ -232,9 +247,9 @@ def main() -> None:
         else:
             durum = "RET" if s["reddetti"] else ("doğru" if s["tam_dogru"] else f"kapsam {s['anahtar_kapsam']:.0%}")
         print(f"{s['id']:22} #{s['tekrar']}  {durum:12} sadık={s['sadik']}  dil={'ok' if s['dil_dogru'] else 'YANLIŞ'}")
-    ozet(sonuclar, arg.hakem, butce)
+    ozet(sonuclar, arg.hakem, butce, arg.mod)
 
-    cikti = KLASOR / "yerel" / f"cevaplar_{datetime.now(UTC):%Y%m%d_%H%M%S}.json"
+    cikti = KLASOR / "yerel" / f"cevaplar_{arg.mod}_{datetime.now(UTC):%Y%m%d_%H%M%S}.json"
     cikti.parent.mkdir(exist_ok=True)
     cikti.write_text(json.dumps(sonuclar, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\nAyrıntı: {cikti}")
